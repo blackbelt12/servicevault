@@ -1,17 +1,34 @@
-import { useState } from "react";
+import { useState, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useLiveQuery } from "dexie-react-hooks";
-import { Plus, Search, Phone, FolderOpen } from "lucide-react";
+import {
+  Plus,
+  Search,
+  Phone,
+  FolderOpen,
+  Home,
+  FileText,
+  Trash2,
+  CheckSquare,
+  Square,
+  X,
+} from "lucide-react";
 import { db } from "@/db";
+import type { Client } from "@/db";
 import { cn } from "@/lib/utils";
+import AddToTargetPicker from "@/components/AddToTargetPicker";
 
-const filters = ["All", "Active", "Lead", "Inactive"] as const;
+const filters = ["All", "Active", "Quote", "Inactive"] as const;
 type Filter = (typeof filters)[number];
 
 export default function ClientsPage() {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<Filter>("All");
+  const [selectedClientIds, setSelectedClientIds] = useState<number[]>([]);
+  const [showPicker, setShowPicker] = useState(false);
   const navigate = useNavigate();
+
+  const selecting = selectedClientIds.length > 0;
 
   const clients = useLiveQuery(async () => {
     const all = await db.clients.orderBy("name").toArray();
@@ -20,13 +37,55 @@ export default function ClientsPage() {
       if (
         search &&
         !c.name.toLowerCase().includes(search.toLowerCase()) &&
-        !c.phone?.includes(search) &&
-        !c.address?.toLowerCase().includes(search.toLowerCase())
+        !c.phone?.includes(search)
       )
         return false;
       return true;
     });
   }, [search, filter]);
+
+  // Get property IDs for selected clients
+  const selectedPropertyIds = useLiveQuery(async () => {
+    if (selectedClientIds.length === 0) return [];
+    const props = await db.properties.toArray();
+    return props
+      .filter((p) => selectedClientIds.includes(p.clientId))
+      .map((p) => p.id!);
+  }, [selectedClientIds]) ?? [];
+
+  const toggleSelect = (clientId: number) => {
+    setSelectedClientIds((prev) =>
+      prev.includes(clientId)
+        ? prev.filter((id) => id !== clientId)
+        : [...prev, clientId]
+    );
+  };
+
+  const handleSetQuote = async (clientId: number) => {
+    await db.clients.update(clientId, {
+      status: "quote",
+      updatedAt: new Date(),
+    });
+  };
+
+  const handleDelete = async (clientId: number) => {
+    const props = await db.properties
+      .where("clientId")
+      .equals(clientId)
+      .toArray();
+    for (const p of props) {
+      await db.clientListMembers.where("propertyId").equals(p.id!).delete();
+    }
+    await db.properties.where("clientId").equals(clientId).delete();
+    const jobs = await db.jobs.where("clientId").equals(clientId).toArray();
+    for (const job of jobs) {
+      await db.jobLineItems.where("jobId").equals(job.id!).delete();
+      await db.routeStops.where("jobId").equals(job.id!).delete();
+      await db.jobPhotos.where("jobId").equals(job.id!).delete();
+    }
+    await db.jobs.where("clientId").equals(clientId).delete();
+    await db.clients.delete(clientId);
+  };
 
   return (
     <div className="flex flex-col h-full">
@@ -34,19 +93,49 @@ export default function ClientsPage() {
         <div className="flex items-center justify-between mb-3">
           <h1 className="text-2xl font-bold">Clients</h1>
           <div className="flex gap-2">
-            <button
-              onClick={() => navigate("/lists")}
-              className="flex items-center gap-1 border border-primary text-primary px-2.5 py-2 rounded-lg text-sm font-medium"
-            >
-              <FolderOpen className="h-4 w-4" />
-            </button>
-            <button
-              onClick={() => navigate("/clients/new")}
-              className="flex items-center gap-1.5 bg-primary text-primary-foreground px-3 py-2 rounded-lg text-sm font-medium"
-            >
-              <Plus className="h-4 w-4" />
-              Add
-            </button>
+            {selecting ? (
+              <>
+                <button
+                  onClick={() => setShowPicker(true)}
+                  className="flex items-center gap-1.5 bg-primary text-primary-foreground px-3 py-2 rounded-lg text-sm font-medium"
+                >
+                  <Plus className="h-4 w-4" />
+                  Add to...
+                </button>
+                <button
+                  onClick={() => setSelectedClientIds([])}
+                  className="flex items-center text-muted-foreground p-2"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </>
+            ) : (
+              <>
+                {clients && clients.length > 0 && (
+                  <button
+                    onClick={() => {
+                      if (clients.length > 0) toggleSelect(clients[0].id!);
+                    }}
+                    className="text-sm text-primary font-medium px-2 py-2"
+                  >
+                    Select
+                  </button>
+                )}
+                <button
+                  onClick={() => navigate("/lists")}
+                  className="flex items-center gap-1 border border-primary text-primary px-2.5 py-2 rounded-lg text-sm font-medium"
+                >
+                  <FolderOpen className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={() => navigate("/clients/new")}
+                  className="flex items-center gap-1.5 bg-primary text-primary-foreground px-3 py-2 rounded-lg text-sm font-medium"
+                >
+                  <Plus className="h-4 w-4" />
+                  Add
+                </button>
+              </>
+            )}
           </div>
         </div>
 
@@ -81,7 +170,9 @@ export default function ClientsPage() {
 
       <div className="flex-1 overflow-y-auto px-4 pb-4">
         {clients === undefined ? (
-          <p className="text-center text-muted-foreground mt-8 text-sm">Loading...</p>
+          <p className="text-center text-muted-foreground mt-8 text-sm">
+            Loading...
+          </p>
         ) : clients.length === 0 ? (
           <div className="text-center mt-12">
             <p className="text-muted-foreground text-sm">No clients found</p>
@@ -94,52 +185,254 @@ export default function ClientsPage() {
           </div>
         ) : (
           <div className="space-y-2 mt-2">
-            {clients.map((client) => (
-              <button
-                key={client.id}
-                onClick={() => navigate(`/clients/${client.id}`)}
-                className="w-full text-left bg-card border border-border rounded-xl p-3.5 flex items-center gap-3 active:bg-accent transition-colors"
-              >
-                <div className="h-10 w-10 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-semibold shrink-0">
-                  {client.name
-                    .split(" ")
-                    .map((w) => w[0])
-                    .join("")
-                    .slice(0, 2)
-                    .toUpperCase()}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium text-sm truncate">
-                      {client.name}
-                    </span>
-                    <span
-                      className={cn(
-                        "text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0",
-                        client.status === "active" &&
-                          "bg-green-100 text-green-700",
-                        client.status === "lead" &&
-                          "bg-blue-100 text-blue-700",
-                        client.status === "inactive" &&
-                          "bg-gray-100 text-gray-500"
-                      )}
-                    >
-                      {client.status}
-                    </span>
+            {clients.map((client) =>
+              selecting ? (
+                <button
+                  key={client.id}
+                  onClick={() => toggleSelect(client.id!)}
+                  className={cn(
+                    "w-full text-left bg-card border border-border rounded-xl p-3.5 flex items-center gap-3 transition-colors",
+                    selectedClientIds.includes(client.id!) && "bg-primary/5 border-primary/30"
+                  )}
+                >
+                  {selectedClientIds.includes(client.id!) ? (
+                    <CheckSquare className="h-5 w-5 text-primary shrink-0" />
+                  ) : (
+                    <Square className="h-5 w-5 text-muted-foreground shrink-0" />
+                  )}
+                  <div className="h-10 w-10 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-semibold shrink-0">
+                    {client.name
+                      .split(" ")
+                      .map((w) => w[0])
+                      .join("")
+                      .slice(0, 2)
+                      .toUpperCase()}
                   </div>
-                  <div className="flex items-center gap-3 mt-0.5">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-sm truncate">
+                        {client.name}
+                      </span>
+                      <span
+                        className={cn(
+                          "text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0",
+                          client.status === "active" &&
+                            "bg-green-100 text-green-700",
+                          client.status === "quote" &&
+                            "bg-blue-100 text-blue-700",
+                          client.status === "inactive" &&
+                            "bg-gray-100 text-gray-500"
+                        )}
+                      >
+                        {client.status}
+                      </span>
+                    </div>
                     {client.phone && (
-                      <span className="text-xs text-muted-foreground flex items-center gap-1">
+                      <span className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
                         <Phone className="h-3 w-3" />
                         {client.phone}
                       </span>
                     )}
                   </div>
-                </div>
-              </button>
-            ))}
+                </button>
+              ) : (
+                <SwipeableClientCard
+                  key={client.id}
+                  client={client}
+                  onTap={() => navigate(`/clients/${client.id}`)}
+                  onLongPress={() => toggleSelect(client.id!)}
+                  onQuote={() => handleSetQuote(client.id!)}
+                  onAddProperty={() =>
+                    navigate(`/clients/${client.id}/edit`)
+                  }
+                  onDelete={() => handleDelete(client.id!)}
+                />
+              )
+            )}
+            {!selecting && clients.length > 0 && (
+              <p className="text-center text-xs text-muted-foreground pt-2">
+                Long press to select · Swipe left for actions
+              </p>
+            )}
           </div>
         )}
+      </div>
+
+      {showPicker && selectedPropertyIds.length > 0 && (
+        <AddToTargetPicker
+          propertyIds={selectedPropertyIds}
+          onClose={() => {
+            setShowPicker(false);
+            setSelectedClientIds([]);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ─── Swipeable Client Card ─── */
+
+function SwipeableClientCard({
+  client,
+  onTap,
+  onLongPress,
+  onQuote,
+  onAddProperty,
+  onDelete,
+}: {
+  client: Client;
+  onTap: () => void;
+  onLongPress: () => void;
+  onQuote: () => void;
+  onAddProperty: () => void;
+  onDelete: () => void;
+}) {
+  const [offset, setOffset] = useState(0);
+  const startX = useRef(0);
+  const startY = useRef(0);
+  const swiping = useRef(false);
+  const isVertical = useRef(false);
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
+
+  const ACTION_WIDTH = 180;
+
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    startX.current = e.touches[0].clientX;
+    startY.current = e.touches[0].clientY;
+    swiping.current = false;
+    isVertical.current = false;
+    longPressTimer.current = setTimeout(() => {
+      longPressTimer.current = null;
+      onLongPress();
+    }, 500);
+  }, [onLongPress]);
+
+  const handleTouchMove = useCallback(
+    (e: React.TouchEvent) => {
+      const dx = e.touches[0].clientX - startX.current;
+      const dy = e.touches[0].clientY - startY.current;
+
+      if (Math.abs(dx) > 8 || Math.abs(dy) > 8) {
+        if (longPressTimer.current) {
+          clearTimeout(longPressTimer.current);
+          longPressTimer.current = null;
+        }
+      }
+
+      if (!swiping.current && !isVertical.current) {
+        if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 5) {
+          isVertical.current = true;
+          return;
+        }
+        if (Math.abs(dx) > 5) {
+          swiping.current = true;
+        }
+      }
+
+      if (isVertical.current) return;
+      if (!swiping.current) return;
+
+      e.preventDefault();
+      const newOffset = Math.max(
+        -ACTION_WIDTH,
+        Math.min(0, dx + (offset < -10 ? -ACTION_WIDTH : 0))
+      );
+      setOffset(newOffset);
+    },
+    [offset]
+  );
+
+  const handleTouchEnd = useCallback(() => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+    if (!swiping.current && !isVertical.current && Math.abs(offset) < 10) {
+      onTap();
+      return;
+    }
+    swiping.current = false;
+    isVertical.current = false;
+    setOffset(offset < -ACTION_WIDTH / 3 ? -ACTION_WIDTH : 0);
+  }, [offset, onTap]);
+
+  const close = () => setOffset(0);
+
+  return (
+    <div className="relative overflow-hidden rounded-xl" ref={cardRef}>
+      <div className="absolute inset-y-0 right-0 flex">
+        <button
+          onClick={() => {
+            close();
+            onQuote();
+          }}
+          className="w-[60px] flex flex-col items-center justify-center bg-blue-500 text-white text-[10px] font-medium gap-0.5"
+        >
+          <FileText className="h-4 w-4" />
+          Quote
+        </button>
+        <button
+          onClick={() => {
+            close();
+            onAddProperty();
+          }}
+          className="w-[60px] flex flex-col items-center justify-center bg-primary text-white text-[10px] font-medium gap-0.5"
+        >
+          <Home className="h-4 w-4" />
+          Property
+        </button>
+        <button
+          onClick={() => {
+            close();
+            onDelete();
+          }}
+          className="w-[60px] flex flex-col items-center justify-center bg-red-500 text-white text-[10px] font-medium gap-0.5"
+        >
+          <Trash2 className="h-4 w-4" />
+          Delete
+        </button>
+      </div>
+
+      <div
+        className="relative bg-card border border-border rounded-xl p-3.5 flex items-center gap-3 transition-transform duration-200 ease-out"
+        style={{ transform: `translateX(${offset}px)` }}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+      >
+        <div className="h-10 w-10 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-semibold shrink-0">
+          {client.name
+            .split(" ")
+            .map((w) => w[0])
+            .join("")
+            .slice(0, 2)
+            .toUpperCase()}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="font-medium text-sm truncate">{client.name}</span>
+            <span
+              className={cn(
+                "text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0",
+                client.status === "active" && "bg-green-100 text-green-700",
+                client.status === "quote" && "bg-blue-100 text-blue-700",
+                client.status === "inactive" && "bg-gray-100 text-gray-500"
+              )}
+            >
+              {client.status}
+            </span>
+          </div>
+          <div className="flex items-center gap-3 mt-0.5">
+            {client.phone && (
+              <span className="text-xs text-muted-foreground flex items-center gap-1">
+                <Phone className="h-3 w-3" />
+                {client.phone}
+              </span>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

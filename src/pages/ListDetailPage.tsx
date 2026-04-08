@@ -8,9 +8,18 @@ import {
   Search,
   X,
   Pencil,
+  CheckSquare,
+  Square,
 } from "lucide-react";
 import { db } from "@/db";
-import type { Client } from "@/db";
+import type { Property } from "@/db";
+import { cn } from "@/lib/utils";
+import AddToTargetPicker from "@/components/AddToTargetPicker";
+
+interface EnrichedProperty extends Property {
+  membershipId: number;
+  clientName: string;
+}
 
 export default function ListDetailPage() {
   const { id } = useParams();
@@ -18,6 +27,18 @@ export default function ListDetailPage() {
   const listId = Number(id);
   const [showAdd, setShowAdd] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [selectedPropIds, setSelectedPropIds] = useState<number[]>([]);
+  const [showPicker, setShowPicker] = useState(false);
+
+  const selecting = selectedPropIds.length > 0;
+
+  const toggleSelect = (propId: number) => {
+    setSelectedPropIds((prev) =>
+      prev.includes(propId)
+        ? prev.filter((id) => id !== propId)
+        : [...prev, propId]
+    );
+  };
 
   const list = useLiveQuery(() => db.clientLists.get(listId), [listId]);
 
@@ -26,12 +47,19 @@ export default function ListDetailPage() {
       .where("listId")
       .equals(listId)
       .toArray();
-    const clients: (Client & { membershipId: number })[] = [];
+    const enriched: EnrichedProperty[] = [];
     for (const m of memberships) {
-      const client = await db.clients.get(m.clientId);
-      if (client) clients.push({ ...client, membershipId: m.id! });
+      const prop = await db.properties.get(m.propertyId);
+      if (!prop) continue;
+      const client = await db.clients.get(prop.clientId);
+      if (!client) continue;
+      enriched.push({
+        ...prop,
+        membershipId: m.id!,
+        clientName: client.name,
+      });
     }
-    return clients.sort((a, b) => a.name.localeCompare(b.name));
+    return enriched.sort((a, b) => a.clientName.localeCompare(b.clientName));
   }, [listId]);
 
   const handleRemove = async (membershipId: number) => {
@@ -77,19 +105,39 @@ export default function ListDetailPage() {
           Lists
         </button>
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => setEditing(true)}
-            className="text-sm text-primary font-medium flex items-center gap-1"
-          >
-            <Pencil className="h-3.5 w-3.5" />
-          </button>
-          <button
-            onClick={() => setShowAdd(true)}
-            className="flex items-center gap-1.5 bg-primary text-primary-foreground px-3 py-2 rounded-lg text-sm font-medium"
-          >
-            <Plus className="h-4 w-4" />
-            Add
-          </button>
+          {selecting ? (
+            <>
+              <button
+                onClick={() => setShowPicker(true)}
+                className="flex items-center gap-1.5 bg-primary text-primary-foreground px-3 py-2 rounded-lg text-sm font-medium"
+              >
+                <Plus className="h-4 w-4" />
+                Add to...
+              </button>
+              <button
+                onClick={() => setSelectedPropIds([])}
+                className="text-muted-foreground p-1"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={() => setEditing(true)}
+                className="text-sm text-primary font-medium flex items-center gap-1"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </button>
+              <button
+                onClick={() => setShowAdd(true)}
+                className="flex items-center gap-1.5 bg-primary text-primary-foreground px-3 py-2 rounded-lg text-sm font-medium"
+              >
+                <Plus className="h-4 w-4" />
+                Add
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -105,40 +153,78 @@ export default function ListDetailPage() {
           {!members || members.length === 0 ? (
             <div className="text-center mt-8">
               <p className="text-muted-foreground text-sm">
-                No clients in this list.
+                No properties in this list.
               </p>
               <button
                 onClick={() => setShowAdd(true)}
                 className="mt-3 text-primary text-sm font-medium"
               >
-                Add clients
+                Add properties
               </button>
             </div>
           ) : (
-            members.map((client) => (
-              <div
-                key={client.membershipId}
-                className="bg-card border border-border rounded-xl p-3.5 flex items-center gap-3"
-              >
-                <button
-                  onClick={() => navigate(`/clients/${client.id}`)}
-                  className="flex-1 min-w-0 text-left active:opacity-70"
-                >
-                  <p className="font-medium text-sm truncate">{client.name}</p>
-                  {client.address && (
-                    <p className="text-xs text-muted-foreground truncate">
-                      {client.address}
-                    </p>
+            <>
+              {members.map((prop) => (
+                <div
+                  key={prop.membershipId}
+                  className={cn(
+                    "bg-card border border-border rounded-xl p-3.5 flex items-center gap-3 transition-colors",
+                    selecting &&
+                      selectedPropIds.includes(prop.id!) &&
+                      "bg-primary/5 border-primary/30"
                   )}
-                </button>
-                <button
-                  onClick={() => handleRemove(client.membershipId)}
-                  className="shrink-0 p-1.5 text-muted-foreground hover:text-destructive transition-colors"
                 >
-                  <Trash2 className="h-4 w-4" />
+                  {selecting ? (
+                    <button
+                      onClick={() => toggleSelect(prop.id!)}
+                      className="shrink-0"
+                    >
+                      {selectedPropIds.includes(prop.id!) ? (
+                        <CheckSquare className="h-5 w-5 text-primary" />
+                      ) : (
+                        <Square className="h-5 w-5 text-muted-foreground" />
+                      )}
+                    </button>
+                  ) : null}
+                  <button
+                    onClick={() =>
+                      selecting
+                        ? toggleSelect(prop.id!)
+                        : navigate(`/clients/${prop.clientId}`)
+                    }
+                    className="flex-1 min-w-0 text-left active:opacity-70"
+                  >
+                    <p className="font-medium text-sm truncate">
+                      {prop.clientName}
+                    </p>
+                    <p className="text-xs text-primary font-medium">
+                      {prop.name}
+                    </p>
+                    <p className="text-xs text-muted-foreground truncate">
+                      {prop.address}
+                    </p>
+                  </button>
+                  {!selecting && (
+                    <button
+                      onClick={() => handleRemove(prop.membershipId)}
+                      className="shrink-0 p-1.5 text-muted-foreground hover:text-destructive transition-colors"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+              ))}
+              {!selecting && members.length > 0 && (
+                <button
+                  onClick={() => {
+                    if (members.length > 0) toggleSelect(members[0].id!);
+                  }}
+                  className="text-center text-xs text-primary font-medium pt-2 w-full"
+                >
+                  Select to add to list or route
                 </button>
-              </div>
-            ))
+              )}
+            </>
           )}
         </div>
       </div>
@@ -146,7 +232,7 @@ export default function ListDetailPage() {
       {showAdd && (
         <AddToListModal
           listId={listId}
-          existingClientIds={members?.map((m) => m.id!) ?? []}
+          existingPropertyIds={members?.map((m) => m.id!) ?? []}
           onClose={() => setShowAdd(false)}
         />
       )}
@@ -158,36 +244,58 @@ export default function ListDetailPage() {
           onDelete={handleDelete}
         />
       )}
+
+      {showPicker && selectedPropIds.length > 0 && (
+        <AddToTargetPicker
+          propertyIds={selectedPropIds}
+          onClose={() => {
+            setShowPicker(false);
+            setSelectedPropIds([]);
+          }}
+        />
+      )}
     </div>
   );
 }
 
 function AddToListModal({
   listId,
-  existingClientIds,
+  existingPropertyIds,
   onClose,
 }: {
   listId: number;
-  existingClientIds: number[];
+  existingPropertyIds: number[];
   onClose: () => void;
 }) {
   const [search, setSearch] = useState("");
 
-  const clients = useLiveQuery(async () => {
-    const all = await db.clients.orderBy("name").toArray();
-    const available = all.filter((c) => !existingClientIds.includes(c.id!));
-    if (!search) return available;
-    const q = search.toLowerCase();
-    return available.filter(
-      (c) =>
-        c.name.toLowerCase().includes(q) ||
-        c.phone?.includes(q) ||
-        c.address?.toLowerCase().includes(q)
+  const properties = useLiveQuery(async () => {
+    const allProps = await db.properties.toArray();
+    const available = allProps.filter(
+      (p) => !existingPropertyIds.includes(p.id!)
     );
-  }, [search, existingClientIds]);
 
-  const handleAdd = async (clientId: number) => {
-    await db.clientListMembers.add({ listId, clientId });
+    const enriched: (Property & { clientName: string })[] = [];
+    for (const p of available) {
+      const client = await db.clients.get(p.clientId);
+      if (!client) continue;
+      enriched.push({ ...p, clientName: client.name });
+    }
+
+    enriched.sort((a, b) => a.clientName.localeCompare(b.clientName));
+
+    if (!search) return enriched;
+    const q = search.toLowerCase();
+    return enriched.filter(
+      (p) =>
+        p.clientName.toLowerCase().includes(q) ||
+        p.address.toLowerCase().includes(q) ||
+        p.name.toLowerCase().includes(q)
+    );
+  }, [search, existingPropertyIds]);
+
+  const handleAdd = async (propertyId: number) => {
+    await db.clientListMembers.add({ listId, propertyId });
   };
 
   return (
@@ -195,7 +303,7 @@ function AddToListModal({
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
       <div className="relative bg-background w-full max-w-[428px] rounded-t-2xl max-h-[85vh] overflow-y-auto animate-in slide-in-from-bottom duration-200">
         <div className="sticky top-0 bg-background flex items-center justify-between p-4 pb-2 border-b border-border z-10">
-          <h2 className="text-lg font-bold">Add Clients</h2>
+          <h2 className="text-lg font-bold">Add Properties</h2>
           <button onClick={onClose} className="text-muted-foreground">
             <X className="h-5 w-5" />
           </button>
@@ -205,21 +313,21 @@ function AddToListModal({
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <input
               type="text"
-              placeholder="Search clients..."
+              placeholder="Search properties..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full pl-9 pr-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
             />
           </div>
           <div className="space-y-1.5">
-            {clients?.map((client) => (
+            {properties?.map((prop) => (
               <button
-                key={client.id}
-                onClick={() => handleAdd(client.id!)}
+                key={prop.id}
+                onClick={() => handleAdd(prop.id!)}
                 className="w-full text-left p-3 rounded-xl border border-border flex items-center gap-3 active:bg-accent transition-colors"
               >
                 <div className="h-9 w-9 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-semibold shrink-0">
-                  {client.name
+                  {prop.clientName
                     .split(" ")
                     .map((w) => w[0])
                     .join("")
@@ -227,19 +335,22 @@ function AddToListModal({
                     .toUpperCase()}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{client.name}</p>
-                  {client.address && (
-                    <p className="text-xs text-muted-foreground truncate">
-                      {client.address}
-                    </p>
-                  )}
+                  <p className="text-sm font-medium truncate">
+                    {prop.clientName}
+                  </p>
+                  <p className="text-xs text-primary font-medium">
+                    {prop.name}
+                  </p>
+                  <p className="text-xs text-muted-foreground truncate">
+                    {prop.address}
+                  </p>
                 </div>
                 <Plus className="h-4 w-4 text-muted-foreground shrink-0" />
               </button>
             ))}
-            {clients?.length === 0 && (
+            {properties?.length === 0 && (
               <p className="text-sm text-muted-foreground text-center py-6">
-                No clients available to add
+                No properties available to add
               </p>
             )}
           </div>

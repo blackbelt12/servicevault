@@ -12,6 +12,10 @@ import {
   Trash2,
   Plus,
   Search,
+  MoreVertical,
+  Save,
+  XCircle,
+  Download,
 } from "lucide-react";
 import {
   DndContext,
@@ -30,13 +34,14 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { db, todayStr } from "@/db";
-import type { Client, Job, RouteStop, JobLineItem, ServiceItem } from "@/db";
+import type { Client, Job, Property, RouteStop, JobLineItem, ServiceItem } from "@/db";
 import { cn } from "@/lib/utils";
 
 interface EnrichedStop {
   stop: RouteStop;
   job: Job;
   client: Client;
+  property?: Property;
   services: string[];
 }
 
@@ -51,6 +56,9 @@ export default function RoutePage() {
   const [enriched, setEnriched] = useState<EnrichedStop[]>([]);
   const [completing, setCompleting] = useState<EnrichedStop | null>(null);
   const [showAddStop, setShowAddStop] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [showLoadModal, setShowLoadModal] = useState(false);
 
   useEffect(() => {
     if (!stops) return;
@@ -61,6 +69,9 @@ export default function RoutePage() {
         if (!job) continue;
         const client = await db.clients.get(job.clientId);
         if (!client) continue;
+        const property = job.propertyId
+          ? await db.properties.get(job.propertyId)
+          : undefined;
         const lineItems = await db.jobLineItems
           .where("jobId")
           .equals(job.id!)
@@ -71,6 +82,7 @@ export default function RoutePage() {
           stop,
           job,
           client,
+          property: property ?? undefined,
           services: services
             .filter((s): s is ServiceItem => s !== undefined)
             .map((s) => s.name),
@@ -123,13 +135,29 @@ export default function RoutePage() {
 
   const startRoute = () => {
     const first = pending[0];
-    if (!first?.client.address) return;
-    const encoded = encodeURIComponent(first.client.address);
+    if (!first?.property?.address) return;
+    const encoded = encodeURIComponent(first.property.address);
     const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
     const url = isIOS
       ? `maps://maps.apple.com/?daddr=${encoded}`
       : `https://www.google.com/maps/dir/?api=1&destination=${encoded}`;
     window.open(url, "_blank");
+  };
+
+  const clearRoute = async () => {
+    const todayStops = await db.routeStops
+      .where("routeDate")
+      .equals(today)
+      .toArray();
+    for (const stop of todayStops) {
+      const job = await db.jobs.get(stop.jobId);
+      if (job && job.status === "scheduled") {
+        await db.jobs.delete(job.id!);
+        await db.jobLineItems.where("jobId").equals(job.id!).delete();
+      }
+      await db.routeStops.delete(stop.id!);
+    }
+    setShowMenu(false);
   };
 
   if (!stops) {
@@ -145,13 +173,22 @@ export default function RoutePage() {
       <div className="p-4">
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-2xl font-bold">Today's Route</h1>
-          <button
-            onClick={() => setShowAddStop(true)}
-            className="flex items-center gap-1.5 bg-primary text-primary-foreground px-3 py-2 rounded-lg text-sm font-medium"
-          >
-            <Plus className="h-4 w-4" />
-            Add Stop
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setShowLoadModal(true)}
+              className="flex items-center gap-1.5 border border-primary text-primary px-3 py-2 rounded-lg text-sm font-medium"
+            >
+              <Download className="h-4 w-4" />
+              Load
+            </button>
+            <button
+              onClick={() => setShowAddStop(true)}
+              className="flex items-center gap-1.5 bg-primary text-primary-foreground px-3 py-2 rounded-lg text-sm font-medium"
+            >
+              <Plus className="h-4 w-4" />
+              Add Stop
+            </button>
+          </div>
         </div>
         <p className="text-muted-foreground text-sm text-center mt-12">
           No stops on today's route yet.
@@ -169,6 +206,13 @@ export default function RoutePage() {
             onClose={() => setShowAddStop(false)}
           />
         )}
+        {showLoadModal && (
+          <LoadRouteModal
+            today={today}
+            existingCount={0}
+            onClose={() => setShowLoadModal(false)}
+          />
+        )}
       </div>
     );
   }
@@ -179,6 +223,51 @@ export default function RoutePage() {
         <div className="flex items-center justify-between mb-3">
           <h1 className="text-2xl font-bold">Today's Route</h1>
           <div className="flex gap-2">
+            <div className="relative">
+              <button
+                onClick={() => setShowMenu(!showMenu)}
+                className="flex items-center gap-1 border border-border text-muted-foreground px-2.5 py-2 rounded-lg text-sm font-medium"
+              >
+                <MoreVertical className="h-4 w-4" />
+              </button>
+              {showMenu && (
+                <>
+                  <div
+                    className="fixed inset-0 z-40"
+                    onClick={() => setShowMenu(false)}
+                  />
+                  <div className="absolute right-0 top-full mt-1 z-50 bg-card border border-border rounded-xl shadow-lg py-1 w-44">
+                    <button
+                      onClick={() => {
+                        setShowMenu(false);
+                        setShowSaveModal(true);
+                      }}
+                      className="w-full text-left px-4 py-2.5 text-sm flex items-center gap-2 active:bg-accent"
+                    >
+                      <Save className="h-4 w-4 text-muted-foreground" />
+                      Save Route
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowMenu(false);
+                        setShowLoadModal(true);
+                      }}
+                      className="w-full text-left px-4 py-2.5 text-sm flex items-center gap-2 active:bg-accent"
+                    >
+                      <Download className="h-4 w-4 text-muted-foreground" />
+                      Load Route
+                    </button>
+                    <button
+                      onClick={clearRoute}
+                      className="w-full text-left px-4 py-2.5 text-sm flex items-center gap-2 text-destructive active:bg-accent"
+                    >
+                      <XCircle className="h-4 w-4" />
+                      Clear Route
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
             <button
               onClick={() => setShowAddStop(true)}
               className="flex items-center gap-1 border border-primary text-primary px-2.5 py-2 rounded-lg text-sm font-medium"
@@ -267,6 +356,21 @@ export default function RoutePage() {
           onClose={() => setShowAddStop(false)}
         />
       )}
+
+      {showSaveModal && (
+        <SaveRouteModal
+          enriched={enriched}
+          onClose={() => setShowSaveModal(false)}
+        />
+      )}
+
+      {showLoadModal && (
+        <LoadRouteModal
+          today={today}
+          existingCount={enriched.length}
+          onClose={() => setShowLoadModal(false)}
+        />
+      )}
     </div>
   );
 }
@@ -317,10 +421,10 @@ function SortableJobCard({
 
       <div className="flex-1 min-w-0">
         <p className="font-medium text-sm truncate">{item.client.name}</p>
-        {item.client.address && (
+        {item.property?.address && (
           <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
             <MapPin className="h-3 w-3 shrink-0" />
-            <span className="truncate">{item.client.address}</span>
+            <span className="truncate">{item.property.address}</span>
           </p>
         )}
         {item.client.phone && (
@@ -362,7 +466,7 @@ function SortableJobCard({
 
 function CompletedJobCard({ item }: { item: EnrichedStop }) {
   return (
-    <div className="bg-card border border-border rounded-xl p-3.5 flex gap-3 opacity-60">
+    <div className="bg-card border border-border rounded-xl p-3.5 flex gap-3 opacity-70">
       <div className="flex flex-col items-center justify-center shrink-0">
         <CheckCircle2 className="h-5 w-5 text-primary" />
       </div>
@@ -381,6 +485,16 @@ function CompletedJobCard({ item }: { item: EnrichedStop }) {
           </p>
         )}
       </div>
+      {item.job.paymentStatus && (
+        <span className={cn(
+          "text-[10px] px-2 py-0.5 rounded-full font-medium self-center shrink-0",
+          item.job.paymentStatus === "paid"
+            ? "bg-green-100 text-green-700"
+            : "bg-amber-100 text-amber-600"
+        )}>
+          {item.job.paymentStatus}
+        </span>
+      )}
     </div>
   );
 }
@@ -417,12 +531,13 @@ function CompleteModal({
     });
   };
 
-  const handleDone = async () => {
+  const handleDone = async (paymentStatus: "paid" | "unpaid") => {
     setSaving(true);
     const now = new Date();
 
     await db.jobs.update(item.job.id!, {
       status: "completed",
+      paymentStatus,
       completedAt: now,
       notes: notes || undefined,
       updatedAt: now,
@@ -559,13 +674,22 @@ function CompleteModal({
           </div>
 
           {/* Submit */}
-          <button
-            onClick={handleDone}
-            disabled={saving}
-            className="w-full bg-primary text-primary-foreground py-3 rounded-xl font-medium text-sm disabled:opacity-50"
-          >
-            {saving ? "Saving..." : "Mark Complete"}
-          </button>
+          <div className="flex gap-3">
+            <button
+              onClick={() => handleDone("unpaid")}
+              disabled={saving}
+              className="flex-1 py-3 rounded-xl font-medium text-sm border border-amber-400 text-amber-600 bg-amber-50 disabled:opacity-50"
+            >
+              Unpaid
+            </button>
+            <button
+              onClick={() => handleDone("paid")}
+              disabled={saving}
+              className="flex-1 py-3 rounded-xl font-medium text-sm bg-primary text-primary-foreground disabled:opacity-50"
+            >
+              Paid
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -589,36 +713,54 @@ function AddStopModal({
 
   const lists = useLiveQuery(() => db.clientLists.orderBy("name").toArray());
 
-  const clients = useLiveQuery(async () => {
-    let pool: Client[];
+  const properties = useLiveQuery(async () => {
+    let pool: (Property & { clientName: string; clientPhone?: string })[];
+
     if (selectedListId) {
       const members = await db.clientListMembers
         .where("listId")
         .equals(selectedListId)
         .toArray();
-      const ids = members.map((m) => m.clientId);
-      pool = (await db.clients.bulkGet(ids)).filter(Boolean) as Client[];
-      pool.sort((a, b) => a.name.localeCompare(b.name));
+      const propIds = members.map((m) => m.propertyId);
+      const props = (await db.properties.bulkGet(propIds)).filter(
+        Boolean
+      ) as Property[];
+      pool = [];
+      for (const p of props) {
+        const client = await db.clients.get(p.clientId);
+        if (!client) continue;
+        pool.push({ ...p, clientName: client.name, clientPhone: client.phone });
+      }
     } else {
-      pool = await db.clients.orderBy("name").toArray();
+      const allProps = await db.properties.toArray();
+      pool = [];
+      for (const p of allProps) {
+        const client = await db.clients.get(p.clientId);
+        if (!client) continue;
+        pool.push({ ...p, clientName: client.name, clientPhone: client.phone });
+      }
     }
+
+    pool.sort((a, b) => a.clientName.localeCompare(b.clientName));
+
     if (!search) return pool;
     const q = search.toLowerCase();
     return pool.filter(
-      (c) =>
-        c.name.toLowerCase().includes(q) ||
-        c.phone?.includes(q) ||
-        c.address?.toLowerCase().includes(q)
+      (p) =>
+        p.clientName.toLowerCase().includes(q) ||
+        p.address.toLowerCase().includes(q) ||
+        p.clientPhone?.includes(q)
     );
   }, [search, selectedListId]);
 
-  const handleAdd = async (client: Client) => {
-    if (!client.id || saving) return;
+  const handleAdd = async (prop: Property & { clientName: string }) => {
+    if (!prop.id || saving) return;
     setSaving(true);
 
     const now = new Date();
     const jobId = (await db.jobs.add({
-      clientId: client.id,
+      clientId: prop.clientId,
+      propertyId: prop.id,
       status: "scheduled",
       scheduledDate: today,
       createdAt: now,
@@ -651,7 +793,7 @@ function AddStopModal({
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <input
               type="text"
-              placeholder="Search clients..."
+              placeholder="Search properties..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full pl-9 pr-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
@@ -687,15 +829,15 @@ function AddStopModal({
           </div>
 
           <div className="space-y-1.5">
-            {clients?.map((client) => (
+            {properties?.map((prop) => (
               <button
-                key={client.id}
-                onClick={() => handleAdd(client)}
+                key={prop.id}
+                onClick={() => handleAdd(prop)}
                 disabled={saving}
                 className="w-full text-left p-3 rounded-xl border border-border flex items-center gap-3 active:bg-accent transition-colors disabled:opacity-50"
               >
                 <div className="h-9 w-9 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-semibold shrink-0">
-                  {client.name
+                  {prop.clientName
                     .split(" ")
                     .map((w) => w[0])
                     .join("")
@@ -704,36 +846,200 @@ function AddStopModal({
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate">
-                    {client.name}
+                    {prop.clientName}
                   </p>
-                  {client.address && (
-                    <p className="text-xs text-muted-foreground truncate">
-                      {client.address}
-                    </p>
-                  )}
+                  <p className="text-xs text-primary font-medium">
+                    {prop.name}
+                  </p>
+                  <p className="text-xs text-muted-foreground truncate">
+                    {prop.address}
+                  </p>
                 </div>
                 <Plus className="h-4 w-4 text-muted-foreground shrink-0" />
               </button>
             ))}
-            {clients?.length === 0 && selectedListId !== null && (
+            {properties?.length === 0 && selectedListId !== null && (
               <div className="text-center py-6">
                 <p className="text-sm text-muted-foreground">
-                  No clients in this list.
+                  No properties in this list.
                 </p>
                 <button
                   onClick={() => setSelectedListId(null)}
                   className="mt-2 text-primary text-sm font-medium"
                 >
-                  Show all clients
+                  Show all properties
                 </button>
               </div>
             )}
-            {clients?.length === 0 && selectedListId === null && (
+            {properties?.length === 0 && selectedListId === null && (
               <p className="text-sm text-muted-foreground text-center py-6">
-                No clients found
+                No properties found
               </p>
             )}
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Save Route Modal ─── */
+
+function SaveRouteModal({
+  enriched,
+  onClose,
+}: {
+  enriched: EnrichedStop[];
+  onClose: () => void;
+}) {
+  const [name, setName] = useState("");
+
+  const handleSave = async () => {
+    if (!name.trim()) return;
+    const propertyIds = enriched
+      .map((e) => e.job.propertyId)
+      .filter(Boolean);
+    await db.savedRoutes.add({
+      name: name.trim(),
+      propertyIds,
+      createdAt: new Date(),
+    });
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-end justify-center">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="relative bg-background w-full max-w-[428px] rounded-t-2xl animate-in slide-in-from-bottom duration-200">
+        <div className="flex items-center justify-between p-4 pb-2 border-b border-border">
+          <h2 className="text-lg font-bold">Save Route</h2>
+          <button onClick={onClose} className="text-muted-foreground">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <div className="p-4 space-y-4">
+          <div>
+            <label className="text-xs font-medium text-muted-foreground mb-1.5 block">
+              Route Name *
+            </label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. Monday Route, North Side"
+              className="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              autoFocus
+            />
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Saves {enriched.length} stop{enriched.length !== 1 ? "s" : ""} as a
+            reusable route.
+          </p>
+          <button
+            onClick={handleSave}
+            disabled={!name.trim()}
+            className="w-full bg-primary text-primary-foreground py-3 rounded-xl font-medium text-sm disabled:opacity-50"
+          >
+            Save Route
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Load Route Modal ─── */
+
+function LoadRouteModal({
+  today,
+  existingCount,
+  onClose,
+}: {
+  today: string;
+  existingCount: number;
+  onClose: () => void;
+}) {
+  const savedRoutes = useLiveQuery(() =>
+    db.savedRoutes.orderBy("name").toArray()
+  );
+  const [loading, setLoading] = useState(false);
+
+  const handleLoad = async (route: { propertyIds: number[] }) => {
+    if (loading) return;
+    setLoading(true);
+
+    const now = new Date();
+    let pos = existingCount;
+
+    for (const propId of route.propertyIds) {
+      const prop = await db.properties.get(propId);
+      if (!prop) continue;
+
+      const jobId = (await db.jobs.add({
+        clientId: prop.clientId,
+        propertyId: propId,
+        status: "scheduled",
+        scheduledDate: today,
+        createdAt: now,
+        updatedAt: now,
+      })) as number;
+
+      await db.routeStops.add({
+        routeDate: today,
+        jobId,
+        position: pos++,
+        status: "pending",
+      });
+    }
+
+    onClose();
+  };
+
+  const handleDelete = async (id: number) => {
+    await db.savedRoutes.delete(id);
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-end justify-center">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="relative bg-background w-full max-w-[428px] rounded-t-2xl max-h-[70vh] overflow-y-auto animate-in slide-in-from-bottom duration-200">
+        <div className="sticky top-0 bg-background flex items-center justify-between p-4 pb-2 border-b border-border z-10">
+          <h2 className="text-lg font-bold">Load Saved Route</h2>
+          <button onClick={onClose} className="text-muted-foreground">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <div className="p-4 space-y-1.5">
+          {!savedRoutes || savedRoutes.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-6">
+              No saved routes yet.
+            </p>
+          ) : (
+            savedRoutes.map((route) => (
+              <div
+                key={route.id}
+                className="flex items-center gap-3 p-3 rounded-xl border border-border"
+              >
+                <button
+                  onClick={() => handleLoad(route)}
+                  disabled={loading}
+                  className="flex-1 text-left active:opacity-70 disabled:opacity-50"
+                >
+                  <p className="text-sm font-medium">{route.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {route.propertyIds.length} stop
+                    {route.propertyIds.length !== 1 ? "s" : ""}
+                  </p>
+                </button>
+                <button
+                  onClick={() => handleDelete(route.id!)}
+                  className="shrink-0 p-1.5 text-muted-foreground hover:text-destructive"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+            ))
+          )}
         </div>
       </div>
     </div>

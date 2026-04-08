@@ -7,6 +7,13 @@ import ClientFormPage from "@/pages/ClientFormPage";
 import SchedulePage from "@/pages/SchedulePage";
 import RoutePage from "@/pages/RoutePage";
 import MorePage from "@/pages/MorePage";
+import QuotesPage from "@/pages/QuotesPage";
+import InvoicesPage from "@/pages/InvoicesPage";
+import ServiceItemsPage from "@/pages/ServiceItemsPage";
+import BusinessSettingsPage from "@/pages/BusinessSettingsPage";
+import ExportDataPage from "@/pages/ExportDataPage";
+import ImportDataPage from "@/pages/ImportDataPage";
+import UnpaidPage from "@/pages/UnpaidPage";
 import ListsPage from "@/pages/ListsPage";
 import ListDetailPage from "@/pages/ListDetailPage";
 import { seedServiceItems, seedRouteDemo } from "@/db";
@@ -29,6 +36,13 @@ export default function App() {
           <Route path="/schedule" element={<SchedulePage />} />
           <Route path="/route" element={<RoutePage />} />
           <Route path="/more" element={<MorePage />} />
+          <Route path="/more/unpaid" element={<UnpaidPage />} />
+          <Route path="/more/quotes" element={<QuotesPage />} />
+          <Route path="/more/invoices" element={<InvoicesPage />} />
+          <Route path="/more/services" element={<ServiceItemsPage />} />
+          <Route path="/more/settings" element={<BusinessSettingsPage />} />
+          <Route path="/more/export" element={<ExportDataPage />} />
+          <Route path="/more/import" element={<ImportDataPage />} />
           <Route path="*" element={<Navigate to="/clients" replace />} />
         </Route>
       </Routes>

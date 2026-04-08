@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useLiveQuery } from "dexie-react-hooks";
 import {
@@ -9,26 +10,51 @@ import {
   StickyNote,
   Calendar,
   FolderOpen,
+  Home,
+  CheckSquare,
+  Square,
+  X,
 } from "lucide-react";
 import { db } from "@/db";
 import type { Job } from "@/db";
 import { cn } from "@/lib/utils";
+import AddToTargetPicker from "@/components/AddToTargetPicker";
 
 export default function ClientDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const clientId = Number(id);
+  const [selectedProps, setSelectedProps] = useState<number[]>([]);
+  const [showListPicker, setShowListPicker] = useState(false);
+
+  const selecting = selectedProps.length > 0;
+
+  const toggleProp = (propId: number) => {
+    setSelectedProps((prev) =>
+      prev.includes(propId)
+        ? prev.filter((id) => id !== propId)
+        : [...prev, propId]
+    );
+  };
 
   const client = useLiveQuery(() => db.clients.get(clientId), [clientId]);
 
+  const properties = useLiveQuery(
+    () => db.properties.where("clientId").equals(clientId).toArray(),
+    [clientId]
+  );
+
   const clientLists = useLiveQuery(async () => {
-    const memberships = await db.clientListMembers
-      .where("clientId")
-      .equals(clientId)
-      .toArray();
-    const lists = await db.clientLists.bulkGet(memberships.map((m) => m.listId));
+    if (!properties) return [];
+    const propIds = properties.map((p) => p.id!);
+    const memberships = await db.clientListMembers.toArray();
+    const relevantMemberships = memberships.filter((m) =>
+      propIds.includes(m.propertyId)
+    );
+    const listIds = [...new Set(relevantMemberships.map((m) => m.listId))];
+    const lists = await db.clientLists.bulkGet(listIds);
     return lists.filter(Boolean) as { id?: number; name: string }[];
-  }, [clientId]);
+  }, [properties]);
 
   const jobs = useLiveQuery(
     () =>
@@ -65,7 +91,7 @@ export default function ClientDetailPage() {
   const statusColor =
     client.status === "active"
       ? "bg-green-100 text-green-700"
-      : client.status === "lead"
+      : client.status === "quote"
         ? "bg-blue-100 text-blue-700"
         : "bg-gray-100 text-gray-500";
 
@@ -135,13 +161,87 @@ export default function ClientDetailPage() {
               <span className="text-primary">{client.email}</span>
             </a>
           )}
-          {client.address && (
-            <div className="flex items-center gap-3 text-sm">
-              <MapPin className="h-4 w-4 text-muted-foreground shrink-0" />
-              <span className="text-foreground">{client.address}</span>
-            </div>
-          )}
         </div>
+
+        {/* Properties */}
+        {properties && properties.length > 0 && (
+          <div className="bg-card border border-border rounded-xl p-4">
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                <Home className="h-4 w-4 text-muted-foreground" />
+                Properties
+              </h2>
+              {selecting ? (
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setShowListPicker(true)}
+                    className="text-xs font-medium text-primary-foreground bg-primary px-2.5 py-1 rounded-lg flex items-center gap-1"
+                  >
+                    <FolderOpen className="h-3 w-3" />
+                    Add to List
+                  </button>
+                  <button
+                    onClick={() => setSelectedProps([])}
+                    className="text-muted-foreground"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => {
+                    if (properties.length > 0) toggleProp(properties[0].id!);
+                  }}
+                  className="text-xs font-medium text-primary"
+                >
+                  Select
+                </button>
+              )}
+            </div>
+            <div className="space-y-2">
+              {properties.map((prop) => (
+                <button
+                  key={prop.id}
+                  onClick={() => selecting && toggleProp(prop.id!)}
+                  className={cn(
+                    "flex items-start gap-2 w-full text-left rounded-lg p-1.5 -mx-1.5 transition-colors",
+                    selecting && "active:bg-accent",
+                    selecting &&
+                      selectedProps.includes(prop.id!) &&
+                      "bg-primary/5"
+                  )}
+                >
+                  {selecting && (
+                    selectedProps.includes(prop.id!) ? (
+                      <CheckSquare className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                    ) : (
+                      <Square className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+                    )
+                  )}
+                  {!selecting && (
+                    <MapPin className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
+                  )}
+                  <div>
+                    <p className="text-xs font-medium text-primary">
+                      {prop.name}
+                    </p>
+                    <p className="text-sm text-foreground">{prop.address}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {showListPicker && (
+          <AddToTargetPicker
+            propertyIds={selectedProps}
+            onClose={() => {
+              setShowListPicker(false);
+              setSelectedProps([]);
+            }}
+          />
+        )}
 
         {clientLists && clientLists.length > 0 && (
           <div className="bg-card border border-border rounded-xl p-4">
@@ -226,3 +326,4 @@ export default function ClientDetailPage() {
     </div>
   );
 }
+

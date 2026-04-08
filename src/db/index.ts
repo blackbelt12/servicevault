@@ -10,22 +10,28 @@ export interface ClientList {
 export interface ClientListMember {
   id?: number;
   listId: number;
-  clientId: number;
+  propertyId: number;
 }
 
 export interface Client {
   id?: number;
-  status: "active" | "lead" | "inactive";
+  status: "active" | "quote" | "inactive";
   name: string;
   phone?: string;
   email?: string;
-  address?: string;
-  lat?: number;
-  lng?: number;
   notes?: string;
   tags?: string[];
   createdAt: Date;
   updatedAt: Date;
+}
+
+export interface Property {
+  id?: number;
+  clientId: number;
+  name: string;
+  address: string;
+  lat?: number;
+  lng?: number;
 }
 
 export interface ServiceItem {
@@ -40,7 +46,9 @@ export interface ServiceItem {
 export interface Job {
   id?: number;
   clientId: number;
+  propertyId: number;
   status: "scheduled" | "in_progress" | "completed" | "skipped" | "cancelled";
+  paymentStatus?: "unpaid" | "paid";
   scheduledDate: string;
   completedAt?: Date;
   notes?: string;
@@ -84,6 +92,7 @@ export interface Payment {
 export interface RecurringSchedule {
   id?: number;
   clientId: number;
+  propertyId: number;
   rrule: string;
   serviceItemIds: number[];
   active: boolean;
@@ -106,6 +115,13 @@ export interface JobPhoto {
   createdAt: Date;
 }
 
+export interface SavedRoute {
+  id?: number;
+  name: string;
+  propertyIds: number[];
+  createdAt: Date;
+}
+
 export interface Setting {
   key: string;
   value: string;
@@ -113,6 +129,7 @@ export interface Setting {
 
 class ServiceVaultDB extends Dexie {
   clients!: EntityTable<Client, "id">;
+  properties!: EntityTable<Property, "id">;
   serviceItems!: EntityTable<ServiceItem, "id">;
   jobs!: EntityTable<Job, "id">;
   jobLineItems!: EntityTable<JobLineItem, "id">;
@@ -123,23 +140,29 @@ class ServiceVaultDB extends Dexie {
   jobPhotos!: EntityTable<JobPhoto, "id">;
   clientLists!: EntityTable<ClientList, "id">;
   clientListMembers!: EntityTable<ClientListMember, "id">;
+  savedRoutes!: EntityTable<SavedRoute, "id">;
   settings!: EntityTable<Setting, "key">;
 
   constructor() {
     super("ServiceVaultDB");
-    this.version(5).stores({
+    this.version(7).stores({
       clients: "++id, name, status, *tags, createdAt",
+      properties: "++id, clientId, name",
       serviceItems: "++id, name, category, active",
-      jobs: "++id, clientId, status, scheduledDate, completedAt",
+      jobs: "++id, clientId, propertyId, status, scheduledDate, completedAt",
       jobLineItems: "++id, jobId, serviceItemId",
       invoices: "++id, jobId, clientId, number, status, issuedDate, dueDate",
       payments: "++id, invoiceId, paidAt",
-      recurringSchedules: "++id, clientId, active",
+      recurringSchedules: "++id, clientId, propertyId, active",
       routeStops: "++id, routeDate, jobId, position",
       jobPhotos: "++id, jobId, type, createdAt",
       clientLists: "++id, name, createdAt",
-      clientListMembers: "++id, listId, clientId, [listId+clientId]",
+      clientListMembers: "++id, listId, propertyId, [listId+propertyId]",
+      savedRoutes: "++id, name, createdAt",
       settings: "key",
+    });
+    this.version(8).stores({
+      jobs: "++id, clientId, propertyId, status, paymentStatus, scheduledDate, completedAt",
     });
   }
 }
@@ -147,7 +170,8 @@ class ServiceVaultDB extends Dexie {
 export const db = new ServiceVaultDB();
 
 export function todayStr() {
-  return new Date().toISOString().split("T")[0];
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 export async function seedRouteDemo() {
@@ -167,10 +191,23 @@ export async function seedRouteDemo() {
     { name: "Linda Chen", phone: "(512) 555-0105", address: "1205 Barton Springs Rd, Austin, TX 78704", status: "active" as const },
   ];
 
+  const propertyIds: number[] = [];
   const clientIds: number[] = [];
   for (const c of clientData) {
-    const id = await db.clients.add({ ...c, createdAt: now, updatedAt: now }) as number;
-    clientIds.push(id);
+    const clientId = await db.clients.add({
+      status: c.status,
+      name: c.name,
+      phone: c.phone,
+      createdAt: now,
+      updatedAt: now,
+    }) as number;
+    clientIds.push(clientId);
+    const propId = await db.properties.add({
+      clientId,
+      name: "Property 1",
+      address: c.address,
+    }) as number;
+    propertyIds.push(propId);
   }
 
   const serviceItems = await db.serviceItems.toArray();
@@ -191,6 +228,7 @@ export async function seedRouteDemo() {
   for (let i = 0; i < clientIds.length; i++) {
     const jobId = await db.jobs.add({
       clientId: clientIds[i],
+      propertyId: propertyIds[i],
       status: "scheduled",
       scheduledDate: today,
       createdAt: now,
