@@ -1,14 +1,25 @@
 import Dexie, { type EntityTable } from "dexie";
 
+export interface ClientList {
+  id?: number;
+  name: string;
+  description?: string;
+  createdAt: Date;
+}
+
+export interface ClientListMember {
+  id?: number;
+  listId: number;
+  clientId: number;
+}
+
 export interface Client {
   id?: number;
+  status: "active" | "lead" | "inactive";
   name: string;
   phone?: string;
   email?: string;
   address?: string;
-  city?: string;
-  state?: string;
-  zip?: string;
   lat?: number;
   lng?: number;
   notes?: string;
@@ -87,6 +98,14 @@ export interface RouteStop {
   status: "pending" | "arrived" | "completed" | "skipped";
 }
 
+export interface JobPhoto {
+  id?: number;
+  jobId: number;
+  type: "before" | "after";
+  data: Blob;
+  createdAt: Date;
+}
+
 export interface Setting {
   key: string;
   value: string;
@@ -101,12 +120,15 @@ class ServiceVaultDB extends Dexie {
   payments!: EntityTable<Payment, "id">;
   recurringSchedules!: EntityTable<RecurringSchedule, "id">;
   routeStops!: EntityTable<RouteStop, "id">;
+  jobPhotos!: EntityTable<JobPhoto, "id">;
+  clientLists!: EntityTable<ClientList, "id">;
+  clientListMembers!: EntityTable<ClientListMember, "id">;
   settings!: EntityTable<Setting, "key">;
 
   constructor() {
     super("ServiceVaultDB");
-    this.version(1).stores({
-      clients: "++id, name, city, zip, *tags, createdAt",
+    this.version(5).stores({
+      clients: "++id, name, status, *tags, createdAt",
       serviceItems: "++id, name, category, active",
       jobs: "++id, clientId, status, scheduledDate, completedAt",
       jobLineItems: "++id, jobId, serviceItemId",
@@ -114,12 +136,83 @@ class ServiceVaultDB extends Dexie {
       payments: "++id, invoiceId, paidAt",
       recurringSchedules: "++id, clientId, active",
       routeStops: "++id, routeDate, jobId, position",
+      jobPhotos: "++id, jobId, type, createdAt",
+      clientLists: "++id, name, createdAt",
+      clientListMembers: "++id, listId, clientId, [listId+clientId]",
       settings: "key",
     });
   }
 }
 
 export const db = new ServiceVaultDB();
+
+export function todayStr() {
+  return new Date().toISOString().split("T")[0];
+}
+
+export async function seedRouteDemo() {
+  const today = todayStr();
+  const existing = await db.routeStops.where("routeDate").equals(today).count();
+  if (existing > 0) return;
+
+  const existingClients = await db.clients.count();
+  if (existingClients > 0) return;
+
+  const now = new Date();
+  const clientData = [
+    { name: "Sarah Johnson", phone: "(512) 555-0101", address: "742 Evergreen Terrace, Austin, TX 78701", status: "active" as const },
+    { name: "Mike Thompson", phone: "(512) 555-0102", address: "1600 Oak Hill Dr, Austin, TX 78735", status: "active" as const },
+    { name: "Garcia Family", phone: "(512) 555-0103", address: "2847 Riverside Ave, Austin, TX 78741", status: "active" as const },
+    { name: "Bluebonnet Office Park", phone: "(512) 555-0104", address: "500 Congress Ave, Austin, TX 78701", status: "active" as const },
+    { name: "Linda Chen", phone: "(512) 555-0105", address: "1205 Barton Springs Rd, Austin, TX 78704", status: "active" as const },
+  ];
+
+  const clientIds: number[] = [];
+  for (const c of clientData) {
+    const id = await db.clients.add({ ...c, createdAt: now, updatedAt: now }) as number;
+    clientIds.push(id);
+  }
+
+  const serviceItems = await db.serviceItems.toArray();
+  const mowing = serviceItems.find((s) => s.name === "Lawn Mowing")!;
+  const edging = serviceItems.find((s) => s.name === "Edging")!;
+  const hedges = serviceItems.find((s) => s.name === "Hedge Trimming")!;
+  const leafs = serviceItems.find((s) => s.name === "Leaf Blowing")!;
+  const mulch = serviceItems.find((s) => s.name === "Mulch Installation")!;
+
+  const jobServices = [
+    [mowing, edging],
+    [mowing, edging, leafs],
+    [mowing, hedges],
+    [mowing, edging, mulch],
+    [mowing, leafs],
+  ];
+
+  for (let i = 0; i < clientIds.length; i++) {
+    const jobId = await db.jobs.add({
+      clientId: clientIds[i],
+      status: "scheduled",
+      scheduledDate: today,
+      createdAt: now,
+      updatedAt: now,
+    }) as number;
+    for (const svc of jobServices[i]) {
+      await db.jobLineItems.add({
+        jobId,
+        serviceItemId: svc.id as number,
+        description: svc.name,
+        quantity: 1,
+        unitPrice: svc.defaultPrice,
+      });
+    }
+    await db.routeStops.add({
+      routeDate: today,
+      jobId: jobId,
+      position: i,
+      status: "pending",
+    });
+  }
+}
 
 export async function seedServiceItems() {
   const count = await db.serviceItems.count();
