@@ -369,13 +369,21 @@ export default function SchedulePage() {
             Loading...
           </p>
         ) : selectedDayJobs.length === 0 ? (
-          <div className="text-center mt-8">
-            <p className="text-muted-foreground text-sm">
-              No jobs scheduled for this day.
+          <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
+            <div className="w-16 h-16 bg-green-50 rounded-2xl flex items-center justify-center mb-4">
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-8 h-8 text-green-600"
+                fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round"
+                  d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+            </div>
+            <h3 className="text-lg font-semibold text-gray-800 mb-1">No jobs scheduled yet</h3>
+            <p className="text-sm text-gray-500 max-w-xs mb-4">
+              Add clients first, then schedule jobs from the Route tab to fill your calendar.
             </p>
             <button
               onClick={() => setShowNewJob(true)}
-              className="mt-3 text-primary text-sm font-medium"
+              className="text-primary text-sm font-medium"
             >
               Add a job
             </button>

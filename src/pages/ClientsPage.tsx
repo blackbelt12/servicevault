@@ -174,11 +174,22 @@ export default function ClientsPage() {
             Loading...
           </p>
         ) : clients.length === 0 ? (
-          <div className="text-center mt-12">
-            <p className="text-muted-foreground text-sm">No clients found</p>
+          <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
+            <div className="w-16 h-16 bg-green-50 rounded-2xl flex items-center justify-center mb-4">
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-8 h-8 text-green-600"
+                fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round"
+                  d="M17 20h5v-1a4 4 0 00-4-4h-1M9 20H4v-1a4 4 0 014-4h1m4-4a4 4 0 100-8 4 4 0 000 8z" />
+              </svg>
+            </div>
+            <h3 className="text-lg font-semibold text-gray-800 mb-1">No clients yet</h3>
+            <p className="text-sm text-gray-500 mb-6 max-w-xs">
+              Add your customers and their properties to get started.
+              They'll show up here once added.
+            </p>
             <button
               onClick={() => navigate("/clients/new")}
-              className="mt-3 text-primary text-sm font-medium"
+              className="text-primary text-sm font-medium"
             >
               Add your first client
             </button>

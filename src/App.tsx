@@ -1,5 +1,5 @@
+import React, { useEffect } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { useEffect } from "react";
 import AppLayout from "@/layouts/AppLayout";
 import ClientsPage from "@/pages/ClientsPage";
 import ClientDetailPage from "@/pages/ClientDetailPage";
@@ -16,33 +16,62 @@ import ImportDataPage from "@/pages/ImportDataPage";
 import UnpaidPage from "@/pages/UnpaidPage";
 import ListsPage from "@/pages/ListsPage";
 import ListDetailPage from "@/pages/ListDetailPage";
-import { seedServiceItems, seedRouteDemo } from "@/db";
+import Onboarding from "@/pages/Onboarding";
+import { db, seedServiceItems } from "@/db";
+
+function OnboardingGuard({ children }: { children: React.ReactNode }) {
+  const [checking, setChecking] = React.useState(true);
+  const [needsOnboarding, setNeedsOnboarding] = React.useState(false);
+
+  React.useEffect(() => {
+    db.settings.get("onboardingDone").then((row) => {
+      setNeedsOnboarding(!row || row.value !== "true");
+      setChecking(false);
+    });
+  }, []);
+
+  if (checking) return null;
+  if (needsOnboarding) return <Navigate to="/onboarding" replace />;
+  return <>{children}</>;
+}
 
 export default function App() {
   useEffect(() => {
-    seedServiceItems().then(() => seedRouteDemo());
+    seedServiceItems();
   }, []);
 
   return (
     <BrowserRouter>
       <Routes>
-        <Route element={<AppLayout />}>
-          <Route path="/clients" element={<ClientsPage />} />
-          <Route path="/clients/new" element={<ClientFormPage />} />
-          <Route path="/clients/:id" element={<ClientDetailPage />} />
-          <Route path="/clients/:id/edit" element={<ClientFormPage />} />
-          <Route path="/lists" element={<ListsPage />} />
-          <Route path="/lists/:id" element={<ListDetailPage />} />
-          <Route path="/schedule" element={<SchedulePage />} />
-          <Route path="/route" element={<RoutePage />} />
-          <Route path="/more" element={<MorePage />} />
-          <Route path="/more/unpaid" element={<UnpaidPage />} />
-          <Route path="/more/quotes" element={<QuotesPage />} />
-          <Route path="/more/invoices" element={<InvoicesPage />} />
-          <Route path="/more/services" element={<ServiceItemsPage />} />
-          <Route path="/more/settings" element={<BusinessSettingsPage />} />
-          <Route path="/more/export" element={<ExportDataPage />} />
-          <Route path="/more/import" element={<ImportDataPage />} />
+        {/* Onboarding — outside AppLayout (no tab bar) */}
+        <Route path="/onboarding" element={<Onboarding />} />
+
+        {/* All other routes — wrapped in the guard */}
+        <Route
+          path="/"
+          element={
+            <OnboardingGuard>
+              <AppLayout />
+            </OnboardingGuard>
+          }
+        >
+          <Route index element={<Navigate to="/clients" replace />} />
+          <Route path="clients" element={<ClientsPage />} />
+          <Route path="clients/new" element={<ClientFormPage />} />
+          <Route path="clients/:id" element={<ClientDetailPage />} />
+          <Route path="clients/:id/edit" element={<ClientFormPage />} />
+          <Route path="lists" element={<ListsPage />} />
+          <Route path="lists/:id" element={<ListDetailPage />} />
+          <Route path="schedule" element={<SchedulePage />} />
+          <Route path="route" element={<RoutePage />} />
+          <Route path="more" element={<MorePage />} />
+          <Route path="more/unpaid" element={<UnpaidPage />} />
+          <Route path="more/quotes" element={<QuotesPage />} />
+          <Route path="more/invoices" element={<InvoicesPage />} />
+          <Route path="more/services" element={<ServiceItemsPage />} />
+          <Route path="more/settings" element={<BusinessSettingsPage />} />
+          <Route path="more/export" element={<ExportDataPage />} />
+          <Route path="more/import" element={<ImportDataPage />} />
           <Route path="*" element={<Navigate to="/clients" replace />} />
         </Route>
       </Routes>

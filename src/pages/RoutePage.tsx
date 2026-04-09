@@ -190,15 +190,19 @@ export default function RoutePage() {
             </button>
           </div>
         </div>
-        <p className="text-muted-foreground text-sm text-center mt-12">
-          No stops on today's route yet.
-        </p>
-        <button
-          onClick={() => setShowAddStop(true)}
-          className="block mx-auto mt-3 text-primary text-sm font-medium"
-        >
-          Add your first stop
-        </button>
+        <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
+          <div className="w-16 h-16 bg-green-50 rounded-2xl flex items-center justify-center mb-4">
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-8 h-8 text-green-600"
+              fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round"
+                d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 13l4.553 2.276A1 1 0 0021 21.382V10.618a1 1 0 00-1.447-.894L15 12m0 8V12m0 0L9 7" />
+            </svg>
+          </div>
+          <h3 className="text-lg font-semibold text-gray-800 mb-1">No stops on today's route</h3>
+          <p className="text-sm text-gray-500 max-w-xs">
+            Add stops from your client list, or load a saved route to get going.
+          </p>
+        </div>
         {showAddStop && (
           <AddStopModal
             today={today}
