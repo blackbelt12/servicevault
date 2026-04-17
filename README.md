@@ -1,73 +1,81 @@
-# React + TypeScript + Vite
+# ServiceVault
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A mobile-first Progressive Web App (PWA) for small field service businesses — lawn care, landscaping, and similar trades. Manage clients, schedule jobs, plan daily routes, generate quotes and invoices, and track payments — all offline-capable and stored locally on your device.
 
-Currently, two official plugins are available:
+**Live app:** https://servicevault-eta.vercel.app
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+---
 
-## React Compiler
+## Features
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- **Clients** — Add, search, and manage clients with properties, tags, notes, and status (active / quote / inactive)
+- **Jobs & Scheduling** — Schedule jobs per property, track status (scheduled → in progress → completed), and log notes
+- **Route Planning** — Drag-and-drop daily route stops with live position tracking
+- **Quotes & Invoices** — Build line-item quotes, convert to invoices, and track payment status
+- **Service Items** — Maintain a catalogue of services with default pricing and categories
+- **Custom Lists** — Organise clients into named lists with drag-and-drop reordering
+- **Unpaid Tracker** — See all outstanding invoices at a glance
+- **Export / Import** — Back up and restore all data as JSON
+- **Business Settings** — Store your business name, contact info, and tax rate
+- **PWA** — Installable on iOS and Android, works fully offline
 
-## Expanding the ESLint configuration
+---
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+## Tech Stack
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+| Layer | Technology |
+|---|---|
+| Framework | React 19 + TypeScript |
+| Build | Vite 6 |
+| Styling | Tailwind CSS v4 |
+| Components | shadcn/ui + lucide-react |
+| Local DB | Dexie.js (IndexedDB) |
+| State | Zustand |
+| Routing | React Router v6 |
+| Drag & Drop | @dnd-kit |
+| PWA | vite-plugin-pwa |
+| Deployment | Vercel |
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+---
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## Project Structure
+
+```
+src/
+  components/   # Shared UI components
+  db/           # Dexie database schema, types, and seed data
+  layouts/      # AppLayout with bottom tab bar
+  lib/          # Utility functions (cn, etc.)
+  pages/        # One file per route
+  store/        # Zustand stores
+  App.tsx       # Router with lazy-loaded routes
+  main.tsx      # Entry point
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+---
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## Getting Started
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
+npm run dev
 ```
+
+Build for production:
+
+```bash
+npm run build
+npm run preview
+```
+
+---
+
+## Data Storage
+
+All data is stored locally in the browser via **IndexedDB** (Dexie.js). Nothing is sent to a server. Use **Export Data** in the app to back up your data as a JSON file, and **Import Data** to restore it.
+
+---
+
+## Contributing
+
+This is a personal project — contributions, bug reports, and suggestions are welcome via issues and pull requests.
