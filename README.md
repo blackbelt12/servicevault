@@ -70,9 +70,29 @@ npm run preview
 
 ---
 
+## Deploying to Vercel
+
+Before each production release, follow the release runbook:
+
+- [Release checklist](docs/release-checklist.md)
+
+The checklist covers:
+- lint/build verification
+- installability checks
+- offline-mode validation
+- backup export/import smoke testing
+- rollback procedure notes
+
+---
+
 ## Data Storage
 
 All data is stored locally in the browser via **IndexedDB** (Dexie.js). Nothing is sent to a server. Use **Export Data** in the app to back up your data as a JSON file, and **Import Data** to restore it.
+
+## Known Limitations
+
+- **Local-only storage:** Data stays in the browser on the current device/profile.
+- **No cloud sync:** There is no automatic multi-device sync.
 
 ---
 
