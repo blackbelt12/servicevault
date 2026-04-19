@@ -1,5 +1,10 @@
 import Dexie, { type EntityTable } from "dexie";
 
+// The schema version the app currently runs on. Bump this alongside the
+// newest `this.version(N).stores(...)` call in ServiceVaultDB below, and
+// consumers (e.g. the backup/restore layer) will pick it up automatically.
+export const CURRENT_DB_VERSION = 8;
+
 export interface ClientList {
   id?: number;
   name: string;
