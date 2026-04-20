@@ -110,8 +110,6 @@ export default function RoutePage() {
     () => completed.filter((e) => e.job.paymentStatus === "paid"),
     [completed]
   );
-  const completedUnpaidCount = completedUnpaid.length;
-  const completedPaidCount = completedPaid.length;
   const doneCount = completed.length;
   const totalCount = enriched.length;
 
@@ -354,26 +352,7 @@ export default function RoutePage() {
         {/* Completed */}
         {completed.length > 0 && (
           <>
-            {completedUnpaidCount > 0 && (
-              <>
-                <p className="text-xs font-medium text-muted-foreground pt-3 px-1">
-                  Awaiting Payment
-                </p>
-                {completedUnpaid.map((item) => (
-                  <CompletedJobCard key={`unpaid-${item.stop.id}`} item={item} />
-                ))}
-              </>
-            )}
-            {completedPaidCount > 0 && (
-              <>
-                <p className="text-xs font-medium text-muted-foreground pt-3 px-1">
-                  Paid Today
-                </p>
-                {completedPaid.map((item) => (
-                  <CompletedJobCard key={`paid-${item.stop.id}`} item={item} />
-                ))}
-              </>
-            )}
+
           </>
         )}
       </div>
