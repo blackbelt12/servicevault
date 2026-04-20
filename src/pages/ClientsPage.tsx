@@ -18,31 +18,47 @@ import type { Client } from "@/db";
 import { cn } from "@/lib/utils";
 import AddToTargetPicker from "@/components/AddToTargetPicker";
 
-const filters = ["All", "Active", "Quote", "Inactive"] as const;
-type Filter = (typeof filters)[number];
+type StatusFilter = "All" | "Active";
 
 export default function ClientsPage() {
   const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<Filter>("All");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("All");
+  const [activeListId, setActiveListId] = useState<number | null>(null);
   const [selectedClientIds, setSelectedClientIds] = useState<number[]>([]);
   const [showPicker, setShowPicker] = useState(false);
   const navigate = useNavigate();
 
   const selecting = selectedClientIds.length > 0;
 
+  const lists = useLiveQuery(() => db.clientLists.orderBy("name").toArray(), []);
+
   const clients = useLiveQuery(async () => {
+    const matchesSearch = (c: { name: string; phone?: string }) =>
+      !search ||
+      c.name.toLowerCase().includes(search.toLowerCase()) ||
+      c.phone?.includes(search);
+
+    if (activeListId !== null) {
+      const members = await db.clientListMembers
+        .where("listId")
+        .equals(activeListId)
+        .toArray();
+      const propertyIds = members.map((m) => m.propertyId);
+      const properties = await db.properties
+        .where("id")
+        .anyOf(propertyIds)
+        .toArray();
+      const clientIds = [...new Set(properties.map((p) => p.clientId))];
+      const all = await db.clients.where("id").anyOf(clientIds).toArray();
+      return all.filter(matchesSearch).sort((a, b) => a.name.localeCompare(b.name));
+    }
+
     const all = await db.clients.orderBy("name").toArray();
     return all.filter((c) => {
-      if (filter !== "All" && c.status !== filter.toLowerCase()) return false;
-      if (
-        search &&
-        !c.name.toLowerCase().includes(search.toLowerCase()) &&
-        !c.phone?.includes(search)
-      )
-        return false;
-      return true;
+      if (statusFilter === "Active" && c.status !== "active") return false;
+      return matchesSearch(c);
     });
-  }, [search, filter]);
+  }, [search, statusFilter, activeListId]);
 
   // Get property IDs for selected clients
   const selectedPropertyIds = useLiveQuery(async () => {
@@ -150,14 +166,14 @@ export default function ClientsPage() {
           />
         </div>
 
-        <div className="flex gap-1.5">
-          {filters.map((f) => (
+        <div className="flex gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none] [-webkit-overflow-scrolling:touch]">
+          {(["All", "Active"] as StatusFilter[]).map((f) => (
             <button
               key={f}
-              onClick={() => setFilter(f)}
+              onClick={() => { setStatusFilter(f); setActiveListId(null); }}
               className={cn(
-                "px-3 py-1.5 rounded-md border text-xs font-semibold transition-colors",
-                filter === f
+                "px-3 py-1.5 rounded-md border text-xs font-semibold whitespace-nowrap transition-colors shrink-0",
+                activeListId === null && statusFilter === f
                   ? "bg-foreground text-background border-foreground"
                   : "bg-background text-foreground/85 border-border"
               )}
@@ -165,6 +181,26 @@ export default function ClientsPage() {
               {f}
             </button>
           ))}
+          {lists?.map((list) => (
+            <button
+              key={list.id}
+              onClick={() => setActiveListId(list.id!)}
+              className={cn(
+                "px-3 py-1.5 rounded-md border text-xs font-semibold whitespace-nowrap transition-colors shrink-0",
+                activeListId === list.id
+                  ? "bg-foreground text-background border-foreground"
+                  : "bg-background text-foreground/85 border-border"
+              )}
+            >
+              {list.name}
+            </button>
+          ))}
+          <button
+            onClick={() => navigate("/lists")}
+            className="px-2.5 py-1.5 rounded-md border border-dashed border-border text-xs font-semibold text-muted-foreground whitespace-nowrap shrink-0 hover:border-primary hover:text-primary transition-colors"
+          >
+            + List
+          </button>
         </div>
 
       </div>
