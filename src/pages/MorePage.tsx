@@ -14,6 +14,7 @@ import {
   Upload,
   ChevronRight,
   DollarSign,
+  CheckCircle2,
   type LucideIcon,
 } from "lucide-react";
 
@@ -32,6 +33,13 @@ const menuItems: {
     description: "View unpaid jobs and invoices",
     section: "business",
     meta: "Review",
+  },
+  {
+    icon: CheckCircle2,
+    label: "Completed Jobs",
+    path: "/more/completed",
+    description: "History of finished mows and services",
+    section: "business",
   },
   {
     icon: Users,

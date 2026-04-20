@@ -16,6 +16,7 @@ import {
   Save,
   XCircle,
   Download,
+  DollarSign,
 } from "lucide-react";
 import {
   DndContext,
@@ -542,6 +543,20 @@ function CompletedJobCard({ item }: { item: EnrichedStop }) {
 
 /* ─── Complete Modal ─── */
 
+interface ExtraCharge {
+  description: string;
+  // Stored as a string so the input can be empty mid-edit. parseExtraPrice
+  // turns it into a number at save time; blank or invalid drops the row.
+  price: string;
+}
+
+const parseExtraPrice = (raw: string): number | null => {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const n = Number(trimmed);
+  return Number.isFinite(n) && n > 0 ? n : null;
+};
+
 function CompleteModal({
   item,
   onClose,
@@ -556,6 +571,33 @@ function CompleteModal({
   const [saving, setSaving] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const [photoType, setPhotoType] = useState<"before" | "after">("before");
+  const [extras, setExtras] = useState<ExtraCharge[]>([]);
+
+  // Baseline charges already attached to this job (seeded on creation from
+  // the property's defaultPrice). We show them so the user knows the
+  // starting total and only adds *additional* per-visit charges here.
+  const baseLineItems = useLiveQuery(
+    () => db.jobLineItems.where("jobId").equals(item.job.id!).toArray(),
+    [item.job.id]
+  );
+  const baseTotal = (baseLineItems ?? []).reduce(
+    (sum, li) => sum + li.quantity * li.unitPrice,
+    0
+  );
+  const extrasTotal = extras.reduce(
+    (sum, e) => sum + (parseExtraPrice(e.price) ?? 0),
+    0
+  );
+  const grandTotal = baseTotal + extrasTotal;
+
+  const addExtra = () =>
+    setExtras((prev) => [...prev, { description: "", price: "" }]);
+  const updateExtra = (idx: number, field: keyof ExtraCharge, value: string) =>
+    setExtras((prev) =>
+      prev.map((e, i) => (i === idx ? { ...e, [field]: value } : e))
+    );
+  const removeExtra = (idx: number) =>
+    setExtras((prev) => prev.filter((_, i) => i !== idx));
 
   const addPhotos = (files: FileList | null, type: "before" | "after") => {
     if (!files) return;
@@ -585,6 +627,21 @@ function CompleteModal({
     });
 
     await db.routeStops.update(item.stop.id!, { status: "completed" });
+
+    // Persist any extra per-visit charges as additional line items.
+    // serviceItemId = 0 marks these as "not tied to a catalog item",
+    // matching the baseline seed in createJobForProperty.
+    for (const extra of extras) {
+      const price = parseExtraPrice(extra.price);
+      if (price === null) continue;
+      await db.jobLineItems.add({
+        jobId: item.job.id!,
+        serviceItemId: 0,
+        description: extra.description.trim() || "Extra charge",
+        quantity: 1,
+        unitPrice: price,
+      });
+    }
 
     for (const photo of photos) {
       await db.jobPhotos.add({
@@ -712,6 +769,83 @@ function CompleteModal({
                 />
               </div>
             )}
+          </div>
+
+          {/* Extra charges */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-xs font-medium text-muted-foreground">
+                Extra Charges
+              </label>
+              {baseTotal > 0 && (
+                <span className="text-[10px] text-muted-foreground">
+                  Base ${baseTotal.toFixed(2)}
+                </span>
+              )}
+            </div>
+
+            {extras.length > 0 && (
+              <div className="space-y-2 mb-2">
+                {extras.map((extra, idx) => (
+                  <div
+                    key={idx}
+                    className="flex items-center gap-2 bg-card border border-border rounded-lg p-2"
+                  >
+                    <input
+                      type="text"
+                      value={extra.description}
+                      onChange={(e) =>
+                        updateExtra(idx, "description", e.target.value)
+                      }
+                      placeholder="e.g. Haul away branches"
+                      className="flex-1 min-w-0 px-2 py-1.5 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    />
+                    <div className="relative w-24 shrink-0">
+                      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                        $
+                      </span>
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        min="0"
+                        step="0.01"
+                        value={extra.price}
+                        onChange={(e) =>
+                          updateExtra(idx, "price", e.target.value)
+                        }
+                        placeholder="0.00"
+                        className="w-full pl-5 pr-2 py-1.5 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                      />
+                    </div>
+                    <button
+                      onClick={() => removeExtra(idx)}
+                      className="shrink-0 p-1 text-muted-foreground hover:text-destructive"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <button
+              onClick={addExtra}
+              className="flex items-center gap-1.5 text-sm text-primary font-medium"
+            >
+              <Plus className="h-4 w-4" />
+              Add charge
+            </button>
+          </div>
+
+          {/* Total */}
+          <div className="flex items-center justify-between rounded-lg border border-border bg-card px-3 py-2.5">
+            <span className="text-sm font-medium flex items-center gap-1.5">
+              <DollarSign className="h-4 w-4 text-muted-foreground" />
+              Job Total
+            </span>
+            <span className="text-base font-semibold">
+              ${grandTotal.toFixed(2)}
+            </span>
           </div>
 
           {/* Submit */}
