@@ -3,7 +3,7 @@ import Dexie, { type EntityTable } from "dexie";
 // The schema version the app currently runs on. Bump this alongside the
 // newest `this.version(N).stores(...)` call in ServiceVaultDB below, and
 // consumers (e.g. the backup/restore layer) will pick it up automatically.
-export const CURRENT_DB_VERSION = 8;
+export const CURRENT_DB_VERSION = 9;
 
 export interface ClientList {
   id?: number;
@@ -37,6 +37,10 @@ export interface Property {
   address: string;
   lat?: number;
   lng?: number;
+  // Baseline per-visit price for this lawn. Auto-fills the first line
+  // item when a new job is created against this property. Extra per-job
+  // charges go on top via additional jobLineItem rows.
+  defaultPrice?: number;
 }
 
 export interface ServiceItem {
@@ -169,6 +173,12 @@ class ServiceVaultDB extends Dexie {
     this.version(8).stores({
       jobs: "++id, clientId, propertyId, status, paymentStatus, scheduledDate, completedAt",
     });
+    // v9: add `defaultPrice` to properties. No new index needed — the
+    // field is read alongside the property by id — so the stores() call
+    // mirrors v7's properties line to register the schema bump.
+    this.version(9).stores({
+      properties: "++id, clientId, name",
+    });
   }
 }
 
@@ -179,82 +189,42 @@ export function todayStr() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-export async function seedRouteDemo() {
-  const today = todayStr();
-  const existing = await db.routeStops.where("routeDate").equals(today).count();
-  if (existing > 0) return;
-
-  const existingClients = await db.clients.count();
-  if (existingClients > 0) return;
-
-  const now = new Date();
-  const clientData = [
-    { name: "Sarah Johnson", phone: "(512) 555-0101", address: "742 Evergreen Terrace, Austin, TX 78701", status: "active" as const },
-    { name: "Mike Thompson", phone: "(512) 555-0102", address: "1600 Oak Hill Dr, Austin, TX 78735", status: "active" as const },
-    { name: "Garcia Family", phone: "(512) 555-0103", address: "2847 Riverside Ave, Austin, TX 78741", status: "active" as const },
-    { name: "Bluebonnet Office Park", phone: "(512) 555-0104", address: "500 Congress Ave, Austin, TX 78701", status: "active" as const },
-    { name: "Linda Chen", phone: "(512) 555-0105", address: "1205 Barton Springs Rd, Austin, TX 78704", status: "active" as const },
-  ];
-
-  const propertyIds: number[] = [];
-  const clientIds: number[] = [];
-  for (const c of clientData) {
-    const clientId = await db.clients.add({
-      status: c.status,
-      name: c.name,
-      phone: c.phone,
-      createdAt: now,
-      updatedAt: now,
-    }) as number;
-    clientIds.push(clientId);
-    const propId = await db.properties.add({
-      clientId,
-      name: "Property 1",
-      address: c.address,
-    }) as number;
-    propertyIds.push(propId);
-  }
-
-  const serviceItems = await db.serviceItems.toArray();
-  const mowing = serviceItems.find((s) => s.name === "Lawn Mowing")!;
-  const edging = serviceItems.find((s) => s.name === "Edging")!;
-  const hedges = serviceItems.find((s) => s.name === "Hedge Trimming")!;
-  const leafs = serviceItems.find((s) => s.name === "Leaf Blowing")!;
-  const mulch = serviceItems.find((s) => s.name === "Mulch Installation")!;
-
-  const jobServices = [
-    [mowing, edging],
-    [mowing, edging, leafs],
-    [mowing, hedges],
-    [mowing, edging, mulch],
-    [mowing, leafs],
-  ];
-
-  for (let i = 0; i < clientIds.length; i++) {
-    const jobId = await db.jobs.add({
-      clientId: clientIds[i],
-      propertyId: propertyIds[i],
-      status: "scheduled",
-      scheduledDate: today,
-      createdAt: now,
-      updatedAt: now,
-    }) as number;
-    for (const svc of jobServices[i]) {
-      await db.jobLineItems.add({
-        jobId,
-        serviceItemId: svc.id as number,
-        description: svc.name,
-        quantity: 1,
-        unitPrice: svc.defaultPrice,
-      });
-    }
-    await db.routeStops.add({
-      routeDate: today,
-      jobId: jobId,
-      position: i,
-      status: "pending",
-    });
-  }
+// Wipe every user-data table in a single transaction. Used by onboarding
+// (to guarantee a clean slate for new users) and by the Reset-all-data
+// button in Business Settings. Service items are left in place — they are
+// a catalog seeded from seedServiceItems(), not user data.
+export async function wipeAllUserData() {
+  await db.transaction(
+    "rw",
+    [
+      db.clients,
+      db.properties,
+      db.jobs,
+      db.jobLineItems,
+      db.invoices,
+      db.payments,
+      db.recurringSchedules,
+      db.routeStops,
+      db.jobPhotos,
+      db.clientLists,
+      db.clientListMembers,
+      db.savedRoutes,
+    ],
+    async () => {
+      await db.clients.clear();
+      await db.properties.clear();
+      await db.jobs.clear();
+      await db.jobLineItems.clear();
+      await db.invoices.clear();
+      await db.payments.clear();
+      await db.recurringSchedules.clear();
+      await db.routeStops.clear();
+      await db.jobPhotos.clear();
+      await db.clientLists.clear();
+      await db.clientListMembers.clear();
+      await db.savedRoutes.clear();
+    },
+  );
 }
 
 export async function seedServiceItems() {

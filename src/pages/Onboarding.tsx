@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { db } from '@/db'
+import { db, wipeAllUserData } from '@/db'
 
 export default function Onboarding() {
   const navigate = useNavigate()
@@ -18,6 +18,10 @@ export default function Onboarding() {
     }
     setSaving(true)
     try {
+      // Guarantee a clean slate: if the user visited an older build that
+      // seeded demo clients, those records would otherwise linger in
+      // IndexedDB forever. Running onboarding means "fresh start".
+      await wipeAllUserData()
       await db.settings.bulkPut([
         { key: 'businessName', value: businessName.trim() },
         { key: 'yourName',     value: yourName.trim() },
