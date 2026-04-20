@@ -108,6 +108,8 @@ export default function RoutePage() {
     () => completed.filter((e) => e.job.paymentStatus === "paid"),
     [completed]
   );
+  const completedUnpaidCount = completedUnpaid.length;
+  const completedPaidCount = completedPaid.length;
   const doneCount = completed.length;
   const totalCount = enriched.length;
 
@@ -323,11 +325,11 @@ export default function RoutePage() {
           </div>
         </div>
 
-        {completedUnpaid.length > 0 && (
+        {completedUnpaidCount > 0 && (
           <div className="mb-3 rounded-md border border-amber-300 bg-amber-100 px-3 py-2 text-sm font-medium text-amber-900">
             <span className="mr-1">$</span>
-            {completedUnpaid.length} completed stop
-            {completedUnpaid.length === 1 ? "" : "s"} awaiting payment
+            {completedUnpaidCount} completed stop
+            {completedUnpaidCount === 1 ? "" : "s"} awaiting payment
           </div>
         )}
       </div>
@@ -357,7 +359,7 @@ export default function RoutePage() {
         {/* Completed */}
         {completed.length > 0 && (
           <>
-            {completedUnpaid.length > 0 && (
+            {completedUnpaidCount > 0 && (
               <>
                 <p className="text-xs font-medium text-muted-foreground pt-3 px-1">
                   Awaiting Payment
@@ -367,7 +369,7 @@ export default function RoutePage() {
                 ))}
               </>
             )}
-            {completedPaid.length > 0 && (
+            {completedPaidCount > 0 && (
               <>
                 <p className="text-xs font-medium text-muted-foreground pt-3 px-1">
                   Paid Today
