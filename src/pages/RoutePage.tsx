@@ -327,13 +327,6 @@ export default function RoutePage() {
           </div>
         </div>
 
-        {completedUnpaidCount > 0 && (
-          <div className="mb-3 rounded-md border border-amber-300 bg-amber-100 px-3 py-2 text-sm font-medium text-amber-900">
-            <span className="mr-1">$</span>
-            {completedUnpaidCount} completed stop
-            {completedUnpaidCount === 1 ? " is" : "s are"} awaiting payment
-          </div>
-        )}
       </div>
 
       <div className="px-4 pb-4 space-y-0 border-y border-border">
