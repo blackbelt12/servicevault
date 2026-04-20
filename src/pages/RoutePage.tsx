@@ -100,6 +100,14 @@ export default function RoutePage() {
     () => enriched.filter((e) => e.stop.status === "completed"),
     [enriched]
   );
+  const completedUnpaid = useMemo(
+    () => completed.filter((e) => e.job.paymentStatus === "unpaid"),
+    [completed]
+  );
+  const completedPaid = useMemo(
+    () => completed.filter((e) => e.job.paymentStatus === "paid"),
+    [completed]
+  );
   const doneCount = completed.length;
   const totalCount = enriched.length;
 
@@ -206,7 +214,6 @@ export default function RoutePage() {
         {showAddStop && (
           <AddStopModal
             today={today}
-            existingCount={0}
             onClose={() => setShowAddStop(false)}
           />
         )}
@@ -291,27 +298,40 @@ export default function RoutePage() {
         </div>
 
         {/* Progress */}
-        <div className="mb-3">
-          <div className="flex items-center justify-between text-sm mb-1.5">
-            <span className="text-muted-foreground">
-              {doneCount} of {totalCount} done
-            </span>
-            {doneCount === totalCount && (
-              <span className="text-primary font-medium">All done!</span>
+        <div className="mb-3 rounded-md border border-border p-3">
+          <div className="flex items-end justify-between mb-2">
+            <div className="flex items-end gap-1">
+              <span className="text-4xl leading-none font-semibold">{doneCount}</span>
+              <span className="text-lg text-muted-foreground mb-0.5">/ {totalCount}</span>
+              <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground mb-1 ml-1">
+                Stops
+              </span>
+            </div>
+            {doneCount === totalCount ? (
+              <span className="text-xs font-semibold text-primary">All done</span>
+            ) : (
+              <span className="text-xs font-semibold text-muted-foreground">Booked</span>
             )}
           </div>
-          <div className="h-2.5 bg-secondary rounded-full overflow-hidden">
+          <div className="h-1.5 bg-secondary overflow-hidden">
             <div
-              className="h-full bg-primary rounded-full transition-all duration-500"
+              className="h-full bg-primary transition-all duration-500"
               style={{
                 width: `${totalCount ? (doneCount / totalCount) * 100 : 0}%`,
               }}
             />
           </div>
         </div>
+
+        {completedUnpaid.length > 0 && (
+          <div className="mb-3 rounded-md border border-amber-300 bg-amber-100 px-3 py-2 text-sm font-medium text-amber-900">
+            <span className="mr-1">$</span>
+            {completedUnpaid.length} completed stop awaiting payment
+          </div>
+        )}
       </div>
 
-      <div className="px-4 pb-4 space-y-2">
+      <div className="px-4 pb-4 space-y-0 border-y border-border">
         {/* Pending — draggable */}
         <DndContext
           sensors={sensors}
@@ -336,12 +356,26 @@ export default function RoutePage() {
         {/* Completed */}
         {completed.length > 0 && (
           <>
-            <p className="text-xs font-medium text-muted-foreground pt-2">
-              Completed
-            </p>
-            {completed.map((item) => (
-              <CompletedJobCard key={item.stop.id} item={item} />
-            ))}
+            {completedUnpaid.length > 0 && (
+              <>
+                <p className="text-xs font-medium text-muted-foreground pt-3 px-1">
+                  Awaiting Payment
+                </p>
+                {completedUnpaid.map((item) => (
+                  <CompletedJobCard key={`unpaid-${item.stop.id}`} item={item} />
+                ))}
+              </>
+            )}
+            {completedPaid.length > 0 && (
+              <>
+                <p className="text-xs font-medium text-muted-foreground pt-3 px-1">
+                  Paid Today
+                </p>
+                {completedPaid.map((item) => (
+                  <CompletedJobCard key={`paid-${item.stop.id}`} item={item} />
+                ))}
+              </>
+            )}
           </>
         )}
       </div>
@@ -356,7 +390,6 @@ export default function RoutePage() {
       {showAddStop && (
         <AddStopModal
           today={today}
-          existingCount={enriched.length}
           onClose={() => setShowAddStop(false)}
         />
       )}
@@ -410,14 +443,14 @@ function SortableJobCard({
     <div
       ref={setNodeRef}
       style={style}
-      className="bg-card border border-border rounded-xl p-3.5 flex gap-3"
+      className="bg-card border-b border-border px-2 py-3 flex gap-3"
     >
       <div
         {...attributes}
         {...listeners}
-        className="flex flex-col items-center justify-center cursor-grab active:cursor-grabbing touch-none shrink-0"
+        className="flex flex-col items-center justify-center cursor-grab active:cursor-grabbing touch-none shrink-0 w-7"
       >
-        <span className="text-xs font-bold text-muted-foreground mb-1">
+        <span className="text-[10px] font-bold text-muted-foreground mb-1">
           {index + 1}
         </span>
         <GripVertical className="h-4 w-4 text-muted-foreground" />
@@ -457,7 +490,7 @@ function SortableJobCard({
 
       <button
         onClick={onComplete}
-        className="shrink-0 self-center flex items-center gap-1 bg-primary text-primary-foreground px-2.5 py-1.5 rounded-lg text-xs font-medium"
+        className="shrink-0 self-center flex items-center gap-1 bg-primary text-primary-foreground px-3 py-2 rounded-md text-xs font-semibold"
       >
         <CheckCircle2 className="h-3.5 w-3.5" />
         Done
@@ -470,7 +503,7 @@ function SortableJobCard({
 
 function CompletedJobCard({ item }: { item: EnrichedStop }) {
   return (
-    <div className="bg-card border border-border rounded-xl p-3.5 flex gap-3 opacity-70">
+    <div className="bg-card border-b border-border px-3 py-3 flex gap-3 opacity-75">
       <div className="flex flex-col items-center justify-center shrink-0">
         <CheckCircle2 className="h-5 w-5 text-primary" />
       </div>
@@ -704,20 +737,25 @@ function CompleteModal({
 
 function AddStopModal({
   today,
-  existingCount,
   onClose,
 }: {
   today: string;
-  existingCount: number;
   onClose: () => void;
 }) {
   const [search, setSearch] = useState("");
   const [selectedListId, setSelectedListId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
+  const [addedPropertyIds, setAddedPropertyIds] = useState<Set<number>>(new Set());
 
   const lists = useLiveQuery(() => db.clientLists.orderBy("name").toArray());
 
   const properties = useLiveQuery(async () => {
+    const todaysJobs = await db.jobs.where("scheduledDate").equals(today).toArray();
+    const activePropertyIds = new Set(
+      todaysJobs
+        .map((job) => job.propertyId)
+        .filter((id): id is number => typeof id === "number")
+    );
     let pool: (Property & { clientName: string; clientPhone?: string })[];
 
     if (selectedListId) {
@@ -731,6 +769,7 @@ function AddStopModal({
       ) as Property[];
       pool = [];
       for (const p of props) {
+        if (activePropertyIds.has(p.id!)) continue;
         const client = await db.clients.get(p.clientId);
         if (!client) continue;
         pool.push({ ...p, clientName: client.name, clientPhone: client.phone });
@@ -739,6 +778,7 @@ function AddStopModal({
       const allProps = await db.properties.toArray();
       pool = [];
       for (const p of allProps) {
+        if (activePropertyIds.has(p.id!)) continue;
         const client = await db.clients.get(p.clientId);
         if (!client) continue;
         pool.push({ ...p, clientName: client.name, clientPhone: client.phone });
@@ -755,7 +795,7 @@ function AddStopModal({
         p.address.toLowerCase().includes(q) ||
         p.clientPhone?.includes(q)
     );
-  }, [search, selectedListId]);
+  }, [search, selectedListId, today, addedPropertyIds]);
 
   const handleAdd = async (prop: Property & { clientName: string }) => {
     if (!prop.id || saving) return;
@@ -774,11 +814,12 @@ function AddStopModal({
     await db.routeStops.add({
       routeDate: today,
       jobId,
-      position: existingCount,
+      position: await db.routeStops.where("routeDate").equals(today).count(),
       status: "pending",
     });
 
-    onClose();
+    setAddedPropertyIds((prev) => new Set(prev).add(prop.id!));
+    setSaving(false);
   };
 
   return (
@@ -859,7 +900,11 @@ function AddStopModal({
                     {prop.address}
                   </p>
                 </div>
-                <Plus className="h-4 w-4 text-muted-foreground shrink-0" />
+                {addedPropertyIds.has(prop.id!) ? (
+                  <CheckCircle2 className="h-4 w-4 text-primary shrink-0" />
+                ) : (
+                  <Plus className="h-4 w-4 text-muted-foreground shrink-0" />
+                )}
               </button>
             ))}
             {properties?.length === 0 && selectedListId !== null && (

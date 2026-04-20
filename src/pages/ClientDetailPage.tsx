@@ -20,6 +20,10 @@ import type { Job } from "@/db";
 import { cn } from "@/lib/utils";
 import AddToTargetPicker from "@/components/AddToTargetPicker";
 
+interface ClientJob extends Job {
+  total: number;
+}
+
 export default function ClientDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -56,15 +60,16 @@ export default function ClientDetailPage() {
     return lists.filter(Boolean) as { id?: number; name: string }[];
   }, [properties]);
 
-  const jobs = useLiveQuery(
-    () =>
-      db.jobs
-        .where("clientId")
-        .equals(clientId)
-        .reverse()
-        .sortBy("scheduledDate"),
-    [clientId]
-  );
+  const jobs = useLiveQuery(async () => {
+    const allJobs = await db.jobs.where("clientId").equals(clientId).toArray();
+    const enriched: ClientJob[] = [];
+    for (const job of allJobs) {
+      const lineItems = await db.jobLineItems.where("jobId").equals(job.id!).toArray();
+      const total = lineItems.reduce((sum, li) => sum + li.quantity * li.unitPrice, 0);
+      enriched.push({ ...job, total });
+    }
+    return enriched.sort((a, b) => b.scheduledDate.localeCompare(a.scheduledDate));
+  }, [clientId]);
 
   if (client === undefined) {
     return (
@@ -277,6 +282,90 @@ export default function ClientDetailPage() {
         <div className="bg-card border border-border rounded-xl p-4">
           <h2 className="text-sm font-semibold text-foreground flex items-center gap-2 mb-3">
             <Calendar className="h-4 w-4 text-muted-foreground" />
+            Billing Summary
+          </h2>
+          {!jobs || jobs.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No completed jobs yet.
+            </p>
+          ) : (
+            (() => {
+              const completed = jobs.filter((job) => job.status === "completed");
+              const paid = completed.filter((job) => job.paymentStatus === "paid");
+              const unpaid = completed.filter((job) => job.paymentStatus === "unpaid");
+              const totalOwed = unpaid.reduce((sum, job) => sum + (job as ClientJob).total, 0);
+
+              return (
+                <div className="space-y-3">
+                  <div className="rounded-lg border border-border p-3">
+                    <div className="grid grid-cols-2 gap-1 text-sm">
+                      <p className="text-muted-foreground">Paid jobs</p>
+                      <p className="text-right font-semibold">{paid.length}</p>
+                      <p className="text-muted-foreground">Unpaid jobs</p>
+                      <p className="text-right font-semibold">{unpaid.length}</p>
+                      <p className="text-muted-foreground">Total owed</p>
+                      <p className="text-right font-semibold">${totalOwed.toFixed(2)}</p>
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className="text-[10px] font-semibold tracking-[0.18em] uppercase text-muted-foreground mb-1.5">
+                      Unpaid
+                    </p>
+                    {unpaid.length === 0 ? (
+                      <p className="text-xs text-muted-foreground">
+                        No unpaid completed jobs.
+                      </p>
+                    ) : (
+                      <div className="space-y-1.5">
+                        {unpaid.map((job) => (
+                          <div
+                            key={`unpaid-${job.id}`}
+                            className="flex items-center justify-between rounded-md border border-amber-300 bg-amber-50 px-3 py-2"
+                          >
+                            <span className="text-sm">{job.scheduledDate}</span>
+                            <span className="text-sm font-semibold">
+                              ${(job as ClientJob).total.toFixed(2)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <p className="text-[10px] font-semibold tracking-[0.18em] uppercase text-muted-foreground mb-1.5">
+                      Paid
+                    </p>
+                    {paid.length === 0 ? (
+                      <p className="text-xs text-muted-foreground">
+                        No paid completed jobs yet.
+                      </p>
+                    ) : (
+                      <div className="space-y-1.5">
+                        {paid.map((job) => (
+                          <div
+                            key={`paid-${job.id}`}
+                            className="flex items-center justify-between rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2"
+                          >
+                            <span className="text-sm">{job.scheduledDate}</span>
+                            <span className="text-sm font-semibold">
+                              ${(job as ClientJob).total.toFixed(2)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })()
+          )}
+        </div>
+
+        <div className="bg-card border border-border rounded-xl p-4">
+          <h2 className="text-sm font-semibold text-foreground flex items-center gap-2 mb-3">
+            <Calendar className="h-4 w-4 text-muted-foreground" />
             Service History
           </h2>
           {!jobs || jobs.length === 0 ? (
@@ -326,4 +415,3 @@ export default function ClientDetailPage() {
     </div>
   );
 }
-
