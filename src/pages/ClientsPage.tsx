@@ -167,18 +167,6 @@ export default function ClientsPage() {
           ))}
         </div>
 
-        {!selecting && (clients?.length ?? 0) > 0 && (
-          <button
-            onClick={() => navigate("/route")}
-            className="mt-3 w-full rounded-lg bg-foreground text-background px-4 py-3 flex items-center justify-between text-left"
-          >
-            <div>
-              <p className="text-sm font-semibold">5 stops remaining today</p>
-              <p className="text-xs text-background/70">1 unpaid · tap to review</p>
-            </div>
-            <span aria-hidden className="text-lg leading-none">›</span>
-          </button>
-        )}
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 pb-4">
