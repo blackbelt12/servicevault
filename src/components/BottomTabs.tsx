@@ -11,7 +11,7 @@ const tabs = [
 
 export default function BottomTabs() {
   return (
-    <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[428px] bg-background border-t border-border z-50">
+    <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[428px] border-t border-border/80 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 z-50">
       <div className="flex justify-around items-center h-16 safe-bottom">
         {tabs.map(({ to, label, icon: Icon }) => (
           <NavLink
@@ -19,15 +19,25 @@ export default function BottomTabs() {
             to={to}
             className={({ isActive }) =>
               cn(
-                "flex flex-col items-center justify-center gap-1 flex-1 h-full text-xs transition-colors",
+                "group relative flex flex-col items-center justify-center gap-1 flex-1 h-full text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-inset",
                 isActive
-                  ? "text-primary font-medium"
+                  ? "text-primary font-semibold"
                   : "text-muted-foreground"
               )
             }
           >
-            <Icon className="h-5 w-5" />
-            <span>{label}</span>
+            {({ isActive }) => (
+              <>
+                <span
+                  className={cn(
+                    "absolute inset-x-6 top-1 h-0.5 rounded-full transition-opacity",
+                    isActive ? "bg-primary opacity-100" : "opacity-0"
+                  )}
+                />
+                <Icon className="h-5 w-5 transition-transform group-active:scale-95" />
+                <span>{label}</span>
+              </>
+            )}
           </NavLink>
         ))}
       </div>

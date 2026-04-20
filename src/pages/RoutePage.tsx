@@ -291,27 +291,40 @@ export default function RoutePage() {
         </div>
 
         {/* Progress */}
-        <div className="mb-3">
-          <div className="flex items-center justify-between text-sm mb-1.5">
-            <span className="text-muted-foreground">
-              {doneCount} of {totalCount} done
-            </span>
-            {doneCount === totalCount && (
-              <span className="text-primary font-medium">All done!</span>
+        <div className="mb-3 rounded-md border border-border p-3">
+          <div className="flex items-end justify-between mb-2">
+            <div className="flex items-end gap-1">
+              <span className="text-4xl leading-none font-semibold">{doneCount}</span>
+              <span className="text-lg text-muted-foreground mb-0.5">/ {totalCount}</span>
+              <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground mb-1 ml-1">
+                Stops
+              </span>
+            </div>
+            {doneCount === totalCount ? (
+              <span className="text-xs font-semibold text-primary">All done</span>
+            ) : (
+              <span className="text-xs font-semibold text-muted-foreground">Booked</span>
             )}
           </div>
-          <div className="h-2.5 bg-secondary rounded-full overflow-hidden">
+          <div className="h-1.5 bg-secondary overflow-hidden">
             <div
-              className="h-full bg-primary rounded-full transition-all duration-500"
+              className="h-full bg-primary transition-all duration-500"
               style={{
                 width: `${totalCount ? (doneCount / totalCount) * 100 : 0}%`,
               }}
             />
           </div>
         </div>
+
+        {completed.some((item) => item.job.paymentStatus === "unpaid") && (
+          <div className="mb-3 rounded-md border border-amber-300 bg-amber-100 px-3 py-2 text-sm font-medium text-amber-900">
+            <span className="mr-1">$</span>
+            {completed.filter((item) => item.job.paymentStatus === "unpaid").length} completed stop awaiting payment
+          </div>
+        )}
       </div>
 
-      <div className="px-4 pb-4 space-y-2">
+      <div className="px-4 pb-4 space-y-0 border-y border-border">
         {/* Pending — draggable */}
         <DndContext
           sensors={sensors}
@@ -336,7 +349,7 @@ export default function RoutePage() {
         {/* Completed */}
         {completed.length > 0 && (
           <>
-            <p className="text-xs font-medium text-muted-foreground pt-2">
+            <p className="text-xs font-medium text-muted-foreground pt-3 px-1">
               Completed
             </p>
             {completed.map((item) => (
@@ -410,14 +423,14 @@ function SortableJobCard({
     <div
       ref={setNodeRef}
       style={style}
-      className="bg-card border border-border rounded-xl p-3.5 flex gap-3"
+      className="bg-card border-b border-border px-2 py-3 flex gap-3"
     >
       <div
         {...attributes}
         {...listeners}
-        className="flex flex-col items-center justify-center cursor-grab active:cursor-grabbing touch-none shrink-0"
+        className="flex flex-col items-center justify-center cursor-grab active:cursor-grabbing touch-none shrink-0 w-7"
       >
-        <span className="text-xs font-bold text-muted-foreground mb-1">
+        <span className="text-[10px] font-bold text-muted-foreground mb-1">
           {index + 1}
         </span>
         <GripVertical className="h-4 w-4 text-muted-foreground" />
@@ -457,7 +470,7 @@ function SortableJobCard({
 
       <button
         onClick={onComplete}
-        className="shrink-0 self-center flex items-center gap-1 bg-primary text-primary-foreground px-2.5 py-1.5 rounded-lg text-xs font-medium"
+        className="shrink-0 self-center flex items-center gap-1 bg-primary text-primary-foreground px-3 py-2 rounded-md text-xs font-semibold"
       >
         <CheckCircle2 className="h-3.5 w-3.5" />
         Done
@@ -470,7 +483,7 @@ function SortableJobCard({
 
 function CompletedJobCard({ item }: { item: EnrichedStop }) {
   return (
-    <div className="bg-card border border-border rounded-xl p-3.5 flex gap-3 opacity-70">
+    <div className="bg-card border-b border-border px-3 py-3 flex gap-3 opacity-75">
       <div className="flex flex-col items-center justify-center shrink-0">
         <CheckCircle2 className="h-5 w-5 text-primary" />
       </div>

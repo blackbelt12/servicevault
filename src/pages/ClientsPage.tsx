@@ -156,16 +156,29 @@ export default function ClientsPage() {
               key={f}
               onClick={() => setFilter(f)}
               className={cn(
-                "px-3 py-1.5 rounded-full text-xs font-medium transition-colors",
+                "px-3 py-1.5 rounded-md border text-xs font-semibold transition-colors",
                 filter === f
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-secondary text-secondary-foreground"
+                  ? "bg-foreground text-background border-foreground"
+                  : "bg-background text-foreground/85 border-border"
               )}
             >
               {f}
             </button>
           ))}
         </div>
+
+        {!selecting && (clients?.length ?? 0) > 0 && (
+          <button
+            onClick={() => navigate("/route")}
+            className="mt-3 w-full rounded-lg bg-foreground text-background px-4 py-3 flex items-center justify-between text-left"
+          >
+            <div>
+              <p className="text-sm font-semibold">5 stops remaining today</p>
+              <p className="text-xs text-background/70">1 unpaid · tap to review</p>
+            </div>
+            <span aria-hidden className="text-lg leading-none">›</span>
+          </button>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 pb-4">
@@ -195,14 +208,14 @@ export default function ClientsPage() {
             </button>
           </div>
         ) : (
-          <div className="space-y-2 mt-2">
+          <div className="space-y-0 mt-2 border-y border-border">
             {clients.map((client) =>
               selecting ? (
                 <button
                   key={client.id}
                   onClick={() => toggleSelect(client.id!)}
                   className={cn(
-                    "w-full text-left bg-card border border-border rounded-xl p-3.5 flex items-center gap-3 transition-colors",
+                    "w-full text-left bg-card border-b border-border last:border-b-0 p-3.5 flex items-center gap-3 transition-colors",
                     selectedClientIds.includes(client.id!) && "bg-primary/5 border-primary/30"
                   )}
                 >
@@ -261,7 +274,7 @@ export default function ClientsPage() {
               )
             )}
             {!selecting && clients.length > 0 && (
-              <p className="text-center text-xs text-muted-foreground pt-2">
+              <p className="text-center text-xs text-muted-foreground pt-3">
                 Long press to select · Swipe left for actions
               </p>
             )}
@@ -372,7 +385,7 @@ function SwipeableClientCard({
   const close = () => setOffset(0);
 
   return (
-    <div className="relative overflow-hidden rounded-xl" ref={cardRef}>
+    <div className="relative overflow-hidden border-b border-border last:border-b-0" ref={cardRef}>
       <div className="absolute inset-y-0 right-0 flex">
         <button
           onClick={() => {
@@ -407,7 +420,7 @@ function SwipeableClientCard({
       </div>
 
       <div
-        className="relative bg-card border border-border rounded-xl p-3.5 flex items-center gap-3 transition-transform duration-200 ease-out"
+        className="relative bg-card p-3.5 flex items-center gap-3 transition-transform duration-200 ease-out"
         style={{ transform: `translateX(${offset}px)` }}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
