@@ -102,14 +102,6 @@ export default function RoutePage() {
     () => enriched.filter((e) => e.stop.status === "completed"),
     [enriched]
   );
-  const completedUnpaid = useMemo(
-    () => completed.filter((e) => e.job.paymentStatus === "unpaid"),
-    [completed]
-  );
-  const completedPaid = useMemo(
-    () => completed.filter((e) => e.job.paymentStatus === "paid"),
-    [completed]
-  );
   const doneCount = completed.length;
   const totalCount = enriched.length;
 
@@ -349,12 +341,6 @@ export default function RoutePage() {
           </SortableContext>
         </DndContext>
 
-        {/* Completed */}
-        {completed.length > 0 && (
-          <>
-
-          </>
-        )}
       </div>
 
       {completing && (
@@ -472,43 +458,6 @@ function SortableJobCard({
         <CheckCircle2 className="h-3.5 w-3.5" />
         Done
       </button>
-    </div>
-  );
-}
-
-/* ─── Completed Job Card ─── */
-
-function CompletedJobCard({ item }: { item: EnrichedStop }) {
-  return (
-    <div className="bg-card border-b border-border px-3 py-3 flex gap-3 opacity-75">
-      <div className="flex flex-col items-center justify-center shrink-0">
-        <CheckCircle2 className="h-5 w-5 text-primary" />
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="font-medium text-sm truncate line-through">
-          {item.client.name}
-        </p>
-        {item.services.length > 0 && (
-          <p className="text-xs text-muted-foreground mt-0.5">
-            {item.services.join(", ")}
-          </p>
-        )}
-        {item.job.notes && (
-          <p className="text-xs text-muted-foreground mt-0.5 italic">
-            {item.job.notes}
-          </p>
-        )}
-      </div>
-      {item.job.paymentStatus && (
-        <span className={cn(
-          "text-[10px] px-2 py-0.5 rounded-full font-medium self-center shrink-0",
-          item.job.paymentStatus === "paid"
-            ? "bg-green-100 text-green-700"
-            : "bg-amber-100 text-amber-600"
-        )}>
-          {item.job.paymentStatus}
-        </span>
-      )}
     </div>
   );
 }
