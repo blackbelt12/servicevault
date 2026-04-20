@@ -206,7 +206,6 @@ export default function RoutePage() {
         {showAddStop && (
           <AddStopModal
             today={today}
-            existingCount={0}
             onClose={() => setShowAddStop(false)}
           />
         )}
@@ -369,7 +368,6 @@ export default function RoutePage() {
       {showAddStop && (
         <AddStopModal
           today={today}
-          existingCount={enriched.length}
           onClose={() => setShowAddStop(false)}
         />
       )}
@@ -717,20 +715,25 @@ function CompleteModal({
 
 function AddStopModal({
   today,
-  existingCount,
   onClose,
 }: {
   today: string;
-  existingCount: number;
   onClose: () => void;
 }) {
   const [search, setSearch] = useState("");
   const [selectedListId, setSelectedListId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
+  const [addedPropertyIds, setAddedPropertyIds] = useState<Set<number>>(new Set());
 
   const lists = useLiveQuery(() => db.clientLists.orderBy("name").toArray());
 
   const properties = useLiveQuery(async () => {
+    const todaysJobs = await db.jobs.where("scheduledDate").equals(today).toArray();
+    const activePropertyIds = new Set(
+      todaysJobs
+        .map((job) => job.propertyId)
+        .filter((id): id is number => typeof id === "number")
+    );
     let pool: (Property & { clientName: string; clientPhone?: string })[];
 
     if (selectedListId) {
@@ -744,6 +747,7 @@ function AddStopModal({
       ) as Property[];
       pool = [];
       for (const p of props) {
+        if (activePropertyIds.has(p.id!)) continue;
         const client = await db.clients.get(p.clientId);
         if (!client) continue;
         pool.push({ ...p, clientName: client.name, clientPhone: client.phone });
@@ -752,6 +756,7 @@ function AddStopModal({
       const allProps = await db.properties.toArray();
       pool = [];
       for (const p of allProps) {
+        if (activePropertyIds.has(p.id!)) continue;
         const client = await db.clients.get(p.clientId);
         if (!client) continue;
         pool.push({ ...p, clientName: client.name, clientPhone: client.phone });
@@ -768,7 +773,7 @@ function AddStopModal({
         p.address.toLowerCase().includes(q) ||
         p.clientPhone?.includes(q)
     );
-  }, [search, selectedListId]);
+  }, [search, selectedListId, today, addedPropertyIds]);
 
   const handleAdd = async (prop: Property & { clientName: string }) => {
     if (!prop.id || saving) return;
@@ -787,11 +792,12 @@ function AddStopModal({
     await db.routeStops.add({
       routeDate: today,
       jobId,
-      position: existingCount,
+      position: await db.routeStops.where("routeDate").equals(today).count(),
       status: "pending",
     });
 
-    onClose();
+    setAddedPropertyIds((prev) => new Set(prev).add(prop.id!));
+    setSaving(false);
   };
 
   return (
@@ -872,7 +878,11 @@ function AddStopModal({
                     {prop.address}
                   </p>
                 </div>
-                <Plus className="h-4 w-4 text-muted-foreground shrink-0" />
+                {addedPropertyIds.has(prop.id!) ? (
+                  <CheckCircle2 className="h-4 w-4 text-primary shrink-0" />
+                ) : (
+                  <Plus className="h-4 w-4 text-muted-foreground shrink-0" />
+                )}
               </button>
             ))}
             {properties?.length === 0 && selectedListId !== null && (

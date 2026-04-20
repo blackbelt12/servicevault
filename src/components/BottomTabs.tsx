@@ -1,11 +1,12 @@
 import { NavLink } from "react-router-dom";
-import { Users, Calendar, MapPin, MoreHorizontal } from "lucide-react";
+import { Users, Calendar, MapPin, BarChart3, MoreHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const tabs = [
   { to: "/clients", label: "Clients", icon: Users },
-  { to: "/schedule", label: "Schedule", icon: Calendar },
   { to: "/route", label: "Route", icon: MapPin },
+  { to: "/schedule", label: "Schedule", icon: Calendar },
+  { to: "/analytics", label: "Analytics", icon: BarChart3 },
   { to: "/more", label: "More", icon: MoreHorizontal },
 ] as const;
 

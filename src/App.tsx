@@ -9,6 +9,7 @@ const ClientDetailPage = React.lazy(() => import("@/pages/ClientDetailPage"));
 const ClientFormPage = React.lazy(() => import("@/pages/ClientFormPage"));
 const SchedulePage = React.lazy(() => import("@/pages/SchedulePage"));
 const RoutePage = React.lazy(() => import("@/pages/RoutePage"));
+const AnalyticsPage = React.lazy(() => import("@/pages/AnalyticsPage"));
 const MorePage = React.lazy(() => import("@/pages/MorePage"));
 const QuotesPage = React.lazy(() => import("@/pages/QuotesPage"));
 const InvoicesPage = React.lazy(() => import("@/pages/InvoicesPage"));
@@ -67,6 +68,7 @@ export default function App() {
             <Route path="lists/:id" element={<ListDetailPage />} />
             <Route path="schedule" element={<SchedulePage />} />
             <Route path="route" element={<RoutePage />} />
+            <Route path="analytics" element={<AnalyticsPage />} />
             <Route path="more" element={<MorePage />} />
             <Route path="more/unpaid" element={<UnpaidPage />} />
             <Route path="more/quotes" element={<QuotesPage />} />
