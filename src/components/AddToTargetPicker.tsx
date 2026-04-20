@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { FolderOpen, Navigation, X } from "lucide-react";
 import { db, todayStr } from "@/db";
+import { createJobForProperty } from "@/lib/jobs";
 
 /**
  * Shared modal for adding selected properties to a List or today's Route.
@@ -44,7 +45,6 @@ export default function AddToTargetPicker({
 
   const handleAddToRoute = async () => {
     const today = todayStr();
-    const now = new Date();
     const existingStops = await db.routeStops
       .where("routeDate")
       .equals(today)
@@ -70,14 +70,11 @@ export default function AddToTargetPicker({
         if (existingStop) continue; // already on today's route
       }
 
-      const jobId = (await db.jobs.add({
+      const jobId = await createJobForProperty({
         clientId: prop.clientId,
         propertyId: propId,
-        status: "scheduled",
         scheduledDate: today,
-        createdAt: now,
-        updatedAt: now,
-      })) as number;
+      });
 
       await db.routeStops.add({
         routeDate: today,

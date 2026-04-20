@@ -9,6 +9,9 @@ interface PropertyForm {
   id?: number;
   name: string;
   address: string;
+  // Stored as a string so the input can be empty mid-edit. Parsed to a
+  // number at save time; blank / non-numeric leaves defaultPrice unset.
+  price: string;
 }
 
 interface FormData {
@@ -23,7 +26,17 @@ interface FormData {
 const newProperty = (index: number): PropertyForm => ({
   name: `Property ${index}`,
   address: "",
+  price: "",
 });
+
+// Parse a price input. Returns undefined for blank / invalid so we don't
+// persist 0 as "the user explicitly wants a zero-dollar lawn".
+const parsePrice = (raw: string): number | undefined => {
+  const trimmed = raw.trim();
+  if (!trimmed) return undefined;
+  const n = Number(trimmed);
+  return Number.isFinite(n) && n >= 0 ? n : undefined;
+};
 
 export default function ClientFormPage() {
   const { id } = useParams();
@@ -61,7 +74,13 @@ export default function ClientFormPage() {
           notes: client.notes ?? "",
           properties:
             props.length > 0
-              ? props.map((p) => ({ id: p.id, name: p.name, address: p.address }))
+              ? props.map((p) => ({
+                  id: p.id,
+                  name: p.name,
+                  address: p.address,
+                  price:
+                    p.defaultPrice !== undefined ? String(p.defaultPrice) : "",
+                }))
               : [newProperty(1)],
         });
         setLoading(false);
@@ -129,12 +148,14 @@ export default function ClientFormPage() {
           await db.properties.update(p.id, {
             name: p.name.trim() || "Property",
             address: p.address.trim(),
+            defaultPrice: parsePrice(p.price),
           });
         } else if (p.address.trim()) {
           await db.properties.add({
             clientId,
             name: p.name.trim() || "Property",
             address: p.address.trim(),
+            defaultPrice: parsePrice(p.price),
           });
         }
       }
@@ -148,6 +169,7 @@ export default function ClientFormPage() {
             clientId: newId,
             name: p.name.trim() || "Property",
             address: p.address.trim(),
+            defaultPrice: parsePrice(p.price),
           });
         }
       }
@@ -267,6 +289,31 @@ export default function ClientFormPage() {
                     placeholder="123 Main St, Austin, TX 78701"
                     className="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                   />
+                  <div>
+                    <label className="text-[10px] uppercase tracking-wide font-medium text-muted-foreground mb-1 block">
+                      Price per visit
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                        $
+                      </span>
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        min="0"
+                        step="0.01"
+                        value={prop.price}
+                        onChange={(e) =>
+                          setProp(idx, "price", e.target.value)
+                        }
+                        placeholder="0.00"
+                        className="w-full pl-7 pr-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                      />
+                    </div>
+                    <p className="text-[10px] text-muted-foreground mt-1">
+                      Baseline charge applied to each new job for this lawn. Extras can be added per visit.
+                    </p>
+                  </div>
                 </div>
               ))}
             </div>

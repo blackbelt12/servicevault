@@ -35,6 +35,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { db, todayStr } from "@/db";
 import type { Client, Job, Property, RouteStop, JobLineItem, ServiceItem } from "@/db";
+import { createJobForProperty } from "@/lib/jobs";
 import { cn } from "@/lib/utils";
 
 interface EnrichedStop {
@@ -804,15 +805,11 @@ function AddStopModal({
     if (!prop.id || saving) return;
     setSaving(true);
 
-    const now = new Date();
-    const jobId = (await db.jobs.add({
+    const jobId = await createJobForProperty({
       clientId: prop.clientId,
       propertyId: prop.id,
-      status: "scheduled",
       scheduledDate: today,
-      createdAt: now,
-      updatedAt: now,
-    })) as number;
+    });
 
     await db.routeStops.add({
       routeDate: today,
@@ -1020,21 +1017,17 @@ function LoadRouteModal({
     if (loading) return;
     setLoading(true);
 
-    const now = new Date();
     let pos = existingCount;
 
     for (const propId of route.propertyIds) {
       const prop = await db.properties.get(propId);
       if (!prop) continue;
 
-      const jobId = (await db.jobs.add({
+      const jobId = await createJobForProperty({
         clientId: prop.clientId,
         propertyId: propId,
-        status: "scheduled",
         scheduledDate: today,
-        createdAt: now,
-        updatedAt: now,
-      })) as number;
+      });
 
       await db.routeStops.add({
         routeDate: today,
