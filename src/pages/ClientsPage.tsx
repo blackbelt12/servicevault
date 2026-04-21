@@ -4,7 +4,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import {
   Plus,
   Search,
-  Phone,
+  MapPin,
   FolderOpen,
   Home,
   FileText,
@@ -12,9 +12,14 @@ import {
   CheckSquare,
   Square,
   X,
+  Navigation,
 } from "lucide-react";
 import { db } from "@/db";
 import type { Client } from "@/db";
+
+interface EnrichedClient extends Client {
+  primaryAddress?: string;
+}
 import { cn } from "@/lib/utils";
 import AddToTargetPicker from "@/components/AddToTargetPicker";
 
@@ -24,6 +29,7 @@ export default function ClientsPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("All");
   const [activeListId, setActiveListId] = useState<number | null>(null);
+  const [activeRouteId, setActiveRouteId] = useState<number | null>(null);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedClientIds, setSelectedClientIds] = useState<number[]>([]);
   const [showPicker, setShowPicker] = useState(false);
@@ -33,6 +39,7 @@ export default function ClientsPage() {
   const selecting = selectionMode || selectedClientIds.length > 0;
 
   const lists = useLiveQuery(() => db.clientLists.orderBy("name").toArray(), []);
+  const savedRoutes = useLiveQuery(() => db.savedRoutes.orderBy("name").toArray(), []);
 
   const clients = useLiveQuery(async () => {
     const matchesSearch = (c: { name: string; phone?: string }) =>
@@ -40,6 +47,30 @@ export default function ClientsPage() {
       c.name.toLowerCase().includes(search.toLowerCase()) ||
       c.phone?.includes(search);
 
+    // Build a clientId → primary address map from all properties
+    const allProps = await db.properties.toArray();
+    const firstPropByClient = new Map<number, string>();
+    for (const p of allProps) {
+      if (!firstPropByClient.has(p.clientId) && p.address)
+        firstPropByClient.set(p.clientId, p.address);
+    }
+    const enrich = (c: Client): EnrichedClient => ({
+      ...c,
+      primaryAddress: firstPropByClient.get(c.id!) ?? undefined,
+    });
+
+    // Filter by saved route
+    if (activeRouteId !== null) {
+      const route = await db.savedRoutes.get(activeRouteId);
+      if (!route) return [];
+      const props = (await db.properties.bulkGet(route.propertyIds)).filter(Boolean);
+      const clientIds = [...new Set(props.map((p) => p!.clientId))];
+      if (clientIds.length === 0) return [];
+      const all = await db.clients.where("id").anyOf(clientIds).toArray();
+      return all.filter(matchesSearch).sort((a, b) => a.name.localeCompare(b.name)).map(enrich);
+    }
+
+    // Filter by saved list
     if (activeListId !== null) {
       const members = await db.clientListMembers
         .where("listId")
@@ -47,22 +78,19 @@ export default function ClientsPage() {
         .toArray();
       const propertyIds = members.map((m) => m.propertyId);
       if (propertyIds.length === 0) return [];
-      const properties = await db.properties
-        .where("id")
-        .anyOf(propertyIds)
-        .toArray();
+      const properties = await db.properties.where("id").anyOf(propertyIds).toArray();
       const clientIds = [...new Set(properties.map((p) => p.clientId))];
       if (clientIds.length === 0) return [];
       const all = await db.clients.where("id").anyOf(clientIds).toArray();
-      return all.filter(matchesSearch).sort((a, b) => a.name.localeCompare(b.name));
+      return all.filter(matchesSearch).sort((a, b) => a.name.localeCompare(b.name)).map(enrich);
     }
 
     const all = await db.clients.orderBy("name").toArray();
     return all.filter((c) => {
       if (statusFilter === "Active" && c.status !== "active") return false;
       return matchesSearch(c);
-    });
-  }, [search, statusFilter, activeListId]);
+    }).map(enrich);
+  }, [search, statusFilter, activeListId, activeRouteId]);
 
   const handleAddTo = async () => {
     const props = await db.properties.toArray();
@@ -173,10 +201,10 @@ export default function ClientsPage() {
           {(["All", "Active"] as StatusFilter[]).map((f) => (
             <button
               key={f}
-              onClick={() => { setStatusFilter(f); setActiveListId(null); }}
+              onClick={() => { setStatusFilter(f); setActiveListId(null); setActiveRouteId(null); }}
               className={cn(
                 "px-3 py-1.5 rounded-md border text-xs font-semibold whitespace-nowrap transition-colors shrink-0",
-                activeListId === null && statusFilter === f
+                activeListId === null && activeRouteId === null && statusFilter === f
                   ? "bg-foreground text-background border-foreground"
                   : "bg-background text-foreground/85 border-border"
               )}
@@ -184,26 +212,42 @@ export default function ClientsPage() {
               {f}
             </button>
           ))}
+          {lists && lists.length > 0 && (
+            <span className="self-center text-[10px] text-muted-foreground font-medium px-1 shrink-0">Lists</span>
+          )}
           {lists?.map((list) => (
             <button
               key={list.id}
-              onClick={() => setActiveListId(list.id!)}
+              onClick={() => { setActiveListId(list.id!); setActiveRouteId(null); }}
               className={cn(
-                "px-3 py-1.5 rounded-md border text-xs font-semibold whitespace-nowrap transition-colors shrink-0",
+                "flex items-center gap-1 px-3 py-1.5 rounded-md border text-xs font-semibold whitespace-nowrap transition-colors shrink-0",
                 activeListId === list.id
                   ? "bg-foreground text-background border-foreground"
                   : "bg-background text-foreground/85 border-border"
               )}
             >
+              <FolderOpen className="h-3 w-3" />
               {list.name}
             </button>
           ))}
-          <button
-            onClick={() => navigate("/lists")}
-            className="px-2.5 py-1.5 rounded-md border border-dashed border-border text-xs font-semibold text-muted-foreground whitespace-nowrap shrink-0 hover:border-primary hover:text-primary transition-colors"
-          >
-            + List
-          </button>
+          {savedRoutes && savedRoutes.length > 0 && (
+            <span className="self-center text-[10px] text-muted-foreground font-medium px-1 shrink-0">Routes</span>
+          )}
+          {savedRoutes?.map((route) => (
+            <button
+              key={route.id}
+              onClick={() => { setActiveRouteId(route.id!); setActiveListId(null); }}
+              className={cn(
+                "flex items-center gap-1 px-3 py-1.5 rounded-md border text-xs font-semibold whitespace-nowrap transition-colors shrink-0",
+                activeRouteId === route.id
+                  ? "bg-foreground text-background border-foreground"
+                  : "bg-background text-foreground/85 border-border"
+              )}
+            >
+              <Navigation className="h-3 w-3" />
+              {route.name}
+            </button>
+          ))}
         </div>
 
       </div>
@@ -278,10 +322,10 @@ export default function ClientsPage() {
                         {client.status}
                       </span>
                     </div>
-                    {client.phone && (
+                    {(client as EnrichedClient).primaryAddress && (
                       <span className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                        <Phone className="h-3 w-3" />
-                        {client.phone}
+                        <MapPin className="h-3 w-3 shrink-0" />
+                        <span className="truncate">{(client as EnrichedClient).primaryAddress}</span>
                       </span>
                     )}
                   </div>
@@ -334,7 +378,7 @@ function SwipeableClientCard({
   onAddProperty,
   onDelete,
 }: {
-  client: Client;
+  client: EnrichedClient;
   onTap: () => void;
   onLongPress: () => void;
   onQuote: () => void;
@@ -479,14 +523,12 @@ function SwipeableClientCard({
               {client.status}
             </span>
           </div>
-          <div className="flex items-center gap-3 mt-0.5">
-            {client.phone && (
-              <span className="text-xs text-muted-foreground flex items-center gap-1">
-                <Phone className="h-3 w-3" />
-                {client.phone}
-              </span>
-            )}
-          </div>
+          {client.primaryAddress && (
+            <span className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+              <MapPin className="h-3 w-3 shrink-0" />
+              <span className="truncate">{client.primaryAddress}</span>
+            </span>
+          )}
         </div>
       </button>
     </div>
