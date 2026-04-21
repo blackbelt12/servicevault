@@ -448,8 +448,9 @@ function SwipeableClientCard({
         </button>
       </div>
 
-      <div
-        className="relative bg-card p-3.5 flex items-center gap-3 transition-transform duration-200 ease-out"
+      <button
+        type="button"
+        className="relative w-full text-left bg-card p-3.5 flex items-center gap-3 transition-transform duration-200 ease-out cursor-pointer"
         style={{ transform: `translateX(${offset}px)` }}
         onClick={() => { if (Math.abs(offset) < 10) onTap(); }}
         onTouchStart={handleTouchStart}
@@ -487,7 +488,7 @@ function SwipeableClientCard({
             )}
           </div>
         </div>
-      </div>
+      </button>
     </div>
   );
 }
