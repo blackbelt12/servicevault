@@ -17,6 +17,7 @@ import {
   XCircle,
   Download,
   DollarSign,
+  BookMarked,
 } from "lucide-react";
 import {
   DndContext,
@@ -61,6 +62,9 @@ export default function RoutePage() {
   const [showMenu, setShowMenu] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [showLoadModal, setShowLoadModal] = useState(false);
+  const [loadingRouteId, setLoadingRouteId] = useState<number | null>(null);
+
+  const savedRoutes = useLiveQuery(() => db.savedRoutes.orderBy("name").toArray());
 
   useEffect(() => {
     if (!stops) return;
@@ -135,6 +139,28 @@ export default function RoutePage() {
     [pending, completed]
   );
 
+  const handleQuickLoad = async (route: { id?: number; propertyIds: number[] }) => {
+    if (loadingRouteId !== null) return;
+    setLoadingRouteId(route.id ?? -1);
+    let pos = enriched.length;
+    for (const propId of route.propertyIds) {
+      const prop = await db.properties.get(propId);
+      if (!prop) continue;
+      const jobId = await createJobForProperty({
+        clientId: prop.clientId,
+        propertyId: propId,
+        scheduledDate: today,
+      });
+      await db.routeStops.add({
+        routeDate: today,
+        jobId,
+        position: pos++,
+        status: "pending",
+      });
+    }
+    setLoadingRouteId(null);
+  };
+
   const startRoute = () => {
     const first = pending[0];
     if (!first?.property?.address) return;
@@ -192,6 +218,35 @@ export default function RoutePage() {
             </button>
           </div>
         </div>
+        {savedRoutes && savedRoutes.length > 0 && (
+          <div className="mb-4">
+            <p className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
+              <BookMarked className="h-3.5 w-3.5" />
+              Saved Routes
+            </p>
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {savedRoutes.map((route) => (
+                <button
+                  key={route.id}
+                  onClick={() => handleQuickLoad(route)}
+                  disabled={loadingRouteId !== null}
+                  className={cn(
+                    "flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm font-medium whitespace-nowrap shrink-0 transition-colors",
+                    loadingRouteId === route.id
+                      ? "border-primary bg-primary/10 text-primary opacity-70"
+                      : "border-border bg-card text-foreground active:bg-accent"
+                  )}
+                >
+                  <Download className="h-3.5 w-3.5 text-muted-foreground" />
+                  {route.name}
+                  <span className="text-xs text-muted-foreground">
+                    {route.propertyIds.length}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
           <div className="w-16 h-16 bg-green-50 rounded-2xl flex items-center justify-center mb-4">
             <svg xmlns="http://www.w3.org/2000/svg" className="w-8 h-8 text-green-600"
@@ -291,6 +346,37 @@ export default function RoutePage() {
             )}
           </div>
         </div>
+
+        {/* Saved Routes Bar */}
+        {savedRoutes && savedRoutes.length > 0 && (
+          <div className="mb-3">
+            <p className="text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1.5">
+              <BookMarked className="h-3.5 w-3.5" />
+              Add from saved
+            </p>
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {savedRoutes.map((route) => (
+                <button
+                  key={route.id}
+                  onClick={() => handleQuickLoad(route)}
+                  disabled={loadingRouteId !== null}
+                  className={cn(
+                    "flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium whitespace-nowrap shrink-0 transition-colors",
+                    loadingRouteId === route.id
+                      ? "border-primary bg-primary/10 text-primary opacity-70"
+                      : "border-border bg-card text-foreground active:bg-accent"
+                  )}
+                >
+                  <Download className="h-3 w-3 text-muted-foreground" />
+                  {route.name}
+                  <span className="text-muted-foreground">
+                    {route.propertyIds.length}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Progress */}
         <div className="mb-3 rounded-md border border-border p-3">

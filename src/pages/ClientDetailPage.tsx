@@ -14,15 +14,21 @@ import {
   CheckSquare,
   Square,
   X,
+  Plus,
+  CheckCircle2,
+  DollarSign,
 } from "lucide-react";
 import { db } from "@/db";
-import type { Job } from "@/db";
+import type { Job, Property } from "@/db";
 import { cn } from "@/lib/utils";
 import AddToTargetPicker from "@/components/AddToTargetPicker";
 
 interface ClientJob extends Job {
   total: number;
+  propertyName?: string;
 }
+
+type JobTab = "all" | "unpaid" | "paid";
 
 export default function ClientDetailPage() {
   const { id } = useParams();
@@ -30,6 +36,8 @@ export default function ClientDetailPage() {
   const clientId = Number(id);
   const [selectedProps, setSelectedProps] = useState<number[]>([]);
   const [showListPicker, setShowListPicker] = useState(false);
+  const [jobTab, setJobTab] = useState<JobTab>("all");
+  const [showLogJob, setShowLogJob] = useState(false);
 
   const selecting = selectedProps.length > 0;
 
@@ -66,10 +74,15 @@ export default function ClientDetailPage() {
     for (const job of allJobs) {
       const lineItems = await db.jobLineItems.where("jobId").equals(job.id!).toArray();
       const total = lineItems.reduce((sum, li) => sum + li.quantity * li.unitPrice, 0);
-      enriched.push({ ...job, total });
+      const property = job.propertyId ? await db.properties.get(job.propertyId) : undefined;
+      enriched.push({ ...job, total, propertyName: property?.name });
     }
     return enriched.sort((a, b) => b.scheduledDate.localeCompare(a.scheduledDate));
   }, [clientId]);
+
+  const markPaid = async (jobId: number) => {
+    await db.jobs.update(jobId, { paymentStatus: "paid", updatedAt: new Date() });
+  };
 
   if (client === undefined) {
     return (
@@ -99,6 +112,16 @@ export default function ClientDetailPage() {
       : client.status === "quote"
         ? "bg-blue-100 text-blue-700"
         : "bg-gray-100 text-gray-500";
+
+  const completedJobs = (jobs ?? []).filter((j) => j.status === "completed");
+  const unpaidJobs = completedJobs.filter((j) => j.paymentStatus === "unpaid");
+  const paidJobs = completedJobs.filter((j) => j.paymentStatus === "paid");
+  const totalOwed = unpaidJobs.reduce((sum, j) => sum + j.total, 0);
+
+  const tabJobs: ClientJob[] =
+    jobTab === "unpaid" ? unpaidJobs :
+    jobTab === "paid" ? paidJobs :
+    completedJobs;
 
   return (
     <div className="flex flex-col">
@@ -131,12 +154,7 @@ export default function ClientDetailPage() {
           </div>
           <div>
             <h1 className="text-xl font-bold">{client.name}</h1>
-            <span
-              className={cn(
-                "text-xs px-2 py-0.5 rounded-full font-medium",
-                statusColor
-              )}
-            >
+            <span className={cn("text-xs px-2 py-0.5 rounded-full font-medium", statusColor)}>
               {client.status}
             </span>
           </div>
@@ -144,30 +162,6 @@ export default function ClientDetailPage() {
       </div>
 
       <div className="px-4 space-y-3 pb-4">
-        <div className="bg-card border border-border rounded-xl p-4 space-y-3">
-          <h2 className="text-sm font-semibold text-foreground">
-            Contact Info
-          </h2>
-          {client.phone && (
-            <a
-              href={`tel:${client.phone}`}
-              className="flex items-center gap-3 text-sm"
-            >
-              <Phone className="h-4 w-4 text-muted-foreground shrink-0" />
-              <span className="text-primary">{client.phone}</span>
-            </a>
-          )}
-          {client.email && (
-            <a
-              href={`mailto:${client.email}`}
-              className="flex items-center gap-3 text-sm"
-            >
-              <Mail className="h-4 w-4 text-muted-foreground shrink-0" />
-              <span className="text-primary">{client.email}</span>
-            </a>
-          )}
-        </div>
-
         {/* Properties */}
         {properties && properties.length > 0 && (
           <div className="bg-card border border-border rounded-xl p-4">
@@ -185,10 +179,7 @@ export default function ClientDetailPage() {
                     <FolderOpen className="h-3 w-3" />
                     Add to List
                   </button>
-                  <button
-                    onClick={() => setSelectedProps([])}
-                    className="text-muted-foreground"
-                  >
+                  <button onClick={() => setSelectedProps([])} className="text-muted-foreground">
                     <X className="h-4 w-4" />
                   </button>
                 </div>
@@ -211,9 +202,7 @@ export default function ClientDetailPage() {
                   className={cn(
                     "flex items-start gap-2 w-full text-left rounded-lg p-1.5 -mx-1.5 transition-colors",
                     selecting && "active:bg-accent",
-                    selecting &&
-                      selectedProps.includes(prop.id!) &&
-                      "bg-primary/5"
+                    selecting && selectedProps.includes(prop.id!) && "bg-primary/5"
                   )}
                 >
                   {selecting && (
@@ -227,9 +216,7 @@ export default function ClientDetailPage() {
                     <MapPin className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
                   )}
                   <div>
-                    <p className="text-xs font-medium text-primary">
-                      {prop.name}
-                    </p>
+                    <p className="text-xs font-medium text-primary">{prop.name}</p>
                     <p className="text-sm text-foreground">{prop.address}</p>
                   </div>
                 </button>
@@ -267,149 +254,322 @@ export default function ClientDetailPage() {
           </div>
         )}
 
+        {(client.phone || client.email) && (
+          <div className="bg-card border border-border rounded-xl p-4 space-y-3">
+            <h2 className="text-sm font-semibold text-foreground">Contact Info</h2>
+            {client.phone && (
+              <a href={`tel:${client.phone}`} className="flex items-center gap-3 text-sm">
+                <Phone className="h-4 w-4 text-muted-foreground shrink-0" />
+                <span className="text-primary">{client.phone}</span>
+              </a>
+            )}
+            {client.email && (
+              <a href={`mailto:${client.email}`} className="flex items-center gap-3 text-sm">
+                <Mail className="h-4 w-4 text-muted-foreground shrink-0" />
+                <span className="text-primary">{client.email}</span>
+              </a>
+            )}
+          </div>
+        )}
+
         {client.notes && (
           <div className="bg-card border border-border rounded-xl p-4">
             <h2 className="text-sm font-semibold text-foreground flex items-center gap-2 mb-2">
               <StickyNote className="h-4 w-4 text-muted-foreground" />
               Notes
             </h2>
-            <p className="text-sm text-muted-foreground whitespace-pre-wrap">
-              {client.notes}
-            </p>
+            <p className="text-sm text-muted-foreground whitespace-pre-wrap">{client.notes}</p>
           </div>
         )}
 
+        {/* Job History */}
         <div className="bg-card border border-border rounded-xl p-4">
-          <h2 className="text-sm font-semibold text-foreground flex items-center gap-2 mb-3">
-            <Calendar className="h-4 w-4 text-muted-foreground" />
-            Billing Summary
-          </h2>
-          {!jobs || jobs.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No completed jobs yet.
-            </p>
-          ) : (
-            (() => {
-              const completed = jobs.filter((job) => job.status === "completed");
-              const paid = completed.filter((job) => job.paymentStatus === "paid");
-              const unpaid = completed.filter((job) => job.paymentStatus === "unpaid");
-              const totalOwed = unpaid.reduce((sum, job) => sum + (job as ClientJob).total, 0);
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
+              <Calendar className="h-4 w-4 text-muted-foreground" />
+              Job History
+            </h2>
+            <button
+              onClick={() => setShowLogJob(true)}
+              className="flex items-center gap-1 text-xs font-medium text-primary"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Log Past Job
+            </button>
+          </div>
 
-              return (
-                <div className="space-y-3">
-                  <div className="rounded-lg border border-border p-3">
-                    <div className="grid grid-cols-2 gap-1 text-sm">
-                      <p className="text-muted-foreground">Paid jobs</p>
-                      <p className="text-right font-semibold">{paid.length}</p>
-                      <p className="text-muted-foreground">Unpaid jobs</p>
-                      <p className="text-right font-semibold">{unpaid.length}</p>
-                      <p className="text-muted-foreground">Total owed</p>
-                      <p className="text-right font-semibold">${totalOwed.toFixed(2)}</p>
-                    </div>
-                  </div>
-
-                  <div>
-                    <p className="text-[10px] font-semibold tracking-[0.18em] uppercase text-muted-foreground mb-1.5">
-                      Unpaid
-                    </p>
-                    {unpaid.length === 0 ? (
-                      <p className="text-xs text-muted-foreground">
-                        No unpaid completed jobs.
-                      </p>
-                    ) : (
-                      <div className="space-y-1.5">
-                        {unpaid.map((job) => (
-                          <div
-                            key={`unpaid-${job.id}`}
-                            className="flex items-center justify-between rounded-md border border-amber-300 bg-amber-50 px-3 py-2"
-                          >
-                            <span className="text-sm">{job.scheduledDate}</span>
-                            <span className="text-sm font-semibold">
-                              ${(job as ClientJob).total.toFixed(2)}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  <div>
-                    <p className="text-[10px] font-semibold tracking-[0.18em] uppercase text-muted-foreground mb-1.5">
-                      Paid
-                    </p>
-                    {paid.length === 0 ? (
-                      <p className="text-xs text-muted-foreground">
-                        No paid completed jobs yet.
-                      </p>
-                    ) : (
-                      <div className="space-y-1.5">
-                        {paid.map((job) => (
-                          <div
-                            key={`paid-${job.id}`}
-                            className="flex items-center justify-between rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2"
-                          >
-                            <span className="text-sm">{job.scheduledDate}</span>
-                            <span className="text-sm font-semibold">
-                              ${(job as ClientJob).total.toFixed(2)}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })()
+          {/* Stats */}
+          {completedJobs.length > 0 && (
+            <div className="grid grid-cols-3 gap-2 mb-3">
+              <div className="rounded-lg bg-secondary p-2.5 text-center">
+                <p className="text-lg font-bold">{completedJobs.length}</p>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Jobs</p>
+              </div>
+              <div className="rounded-lg bg-amber-50 border border-amber-200 p-2.5 text-center">
+                <p className="text-lg font-bold text-amber-700">{unpaidJobs.length}</p>
+                <p className="text-[10px] text-amber-600 uppercase tracking-wide">Unpaid</p>
+              </div>
+              <div className="rounded-lg bg-secondary p-2.5 text-center">
+                <p className="text-lg font-bold">${totalOwed.toFixed(0)}</p>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Owed</p>
+              </div>
+            </div>
           )}
-        </div>
 
-        <div className="bg-card border border-border rounded-xl p-4">
-          <h2 className="text-sm font-semibold text-foreground flex items-center gap-2 mb-3">
-            <Calendar className="h-4 w-4 text-muted-foreground" />
-            Service History
-          </h2>
-          {!jobs || jobs.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No service history yet.
+          {/* Tabs */}
+          <div className="flex gap-1.5 mb-3">
+            {(["all", "unpaid", "paid"] as JobTab[]).map((t) => (
+              <button
+                key={t}
+                onClick={() => setJobTab(t)}
+                className={cn(
+                  "px-3 py-1 rounded-full text-xs font-medium transition-colors capitalize",
+                  jobTab === t
+                    ? "bg-foreground text-background"
+                    : "bg-secondary text-muted-foreground"
+                )}
+              >
+                {t}
+                {t === "unpaid" && unpaidJobs.length > 0 && (
+                  <span className="ml-1 bg-amber-500 text-white rounded-full px-1 text-[10px]">
+                    {unpaidJobs.length}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+
+          {/* Job list */}
+          {!jobs ? (
+            <p className="text-sm text-muted-foreground text-center py-4">Loading...</p>
+          ) : tabJobs.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-4">
+              {jobTab === "unpaid" ? "No unpaid jobs." : jobTab === "paid" ? "No paid jobs yet." : "No completed jobs yet."}
             </p>
           ) : (
             <div className="space-y-2">
-              {jobs.map((job: Job) => (
+              {tabJobs.map((job) => (
                 <div
                   key={job.id}
-                  className="flex items-center justify-between py-2 border-b border-border last:border-0"
+                  className={cn(
+                    "rounded-lg border px-3 py-2.5 flex items-center gap-2",
+                    job.paymentStatus === "unpaid"
+                      ? "border-amber-300 bg-amber-50"
+                      : "border-emerald-200 bg-emerald-50"
+                  )}
                 >
-                  <div>
-                    <p className="text-sm font-medium">
-                      {job.scheduledDate}
-                    </p>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium">{job.scheduledDate}</p>
+                    {job.propertyName && (
+                      <p className="text-xs text-muted-foreground truncate">{job.propertyName}</p>
+                    )}
                     {job.notes && (
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        {job.notes}
-                      </p>
+                      <p className="text-xs text-muted-foreground truncate mt-0.5 italic">{job.notes}</p>
                     )}
                   </div>
-                  <span
-                    className={cn(
-                      "text-[10px] px-2 py-0.5 rounded-full font-medium",
-                      job.status === "completed" &&
-                        "bg-green-100 text-green-700",
-                      job.status === "scheduled" &&
-                        "bg-blue-100 text-blue-700",
-                      job.status === "in_progress" &&
-                        "bg-yellow-100 text-yellow-700",
-                      job.status === "skipped" &&
-                        "bg-gray-100 text-gray-500",
-                      job.status === "cancelled" &&
-                        "bg-red-100 text-red-600"
+                  <div className="flex items-center gap-2 shrink-0">
+                    {job.total > 0 && (
+                      <span className="text-sm font-semibold">${job.total.toFixed(2)}</span>
                     )}
-                  >
-                    {job.status.replace("_", " ")}
-                  </span>
+                    {job.paymentStatus === "unpaid" ? (
+                      <button
+                        onClick={() => markPaid(job.id!)}
+                        className="flex items-center gap-1 text-xs font-medium bg-emerald-600 text-white px-2 py-1 rounded-md"
+                      >
+                        <CheckCircle2 className="h-3 w-3" />
+                        Mark Paid
+                      </button>
+                    ) : (
+                      <span className="flex items-center gap-1 text-xs font-medium text-emerald-700">
+                        <DollarSign className="h-3 w-3" />
+                        Paid
+                      </span>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
           )}
+        </div>
+      </div>
+
+      {showLogJob && properties && (
+        <LogPastJobModal
+          clientId={clientId}
+          properties={properties}
+          onClose={() => setShowLogJob(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ─── Log Past Job Modal ─── */
+
+function LogPastJobModal({
+  clientId,
+  properties,
+  onClose,
+}: {
+  clientId: number;
+  properties: Property[];
+  onClose: () => void;
+}) {
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const defaultDate = yesterday.toISOString().split("T")[0];
+
+  const [date, setDate] = useState(defaultDate);
+  const [propertyId, setPropertyId] = useState<number>(properties[0]?.id ?? 0);
+  const [amount, setAmount] = useState("");
+  const [paymentStatus, setPaymentStatus] = useState<"paid" | "unpaid">("paid");
+  const [notes, setNotes] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    if (!date || !propertyId) return;
+    setSaving(true);
+    const now = new Date();
+    const jobDate = new Date(date + "T12:00:00");
+
+    const jobId = (await db.jobs.add({
+      clientId,
+      propertyId,
+      status: "completed",
+      paymentStatus,
+      scheduledDate: date,
+      completedAt: jobDate,
+      notes: notes.trim() || undefined,
+      createdAt: now,
+      updatedAt: now,
+    })) as number;
+
+    const parsedAmount = parseFloat(amount);
+    if (parsedAmount > 0) {
+      await db.jobLineItems.add({
+        jobId,
+        serviceItemId: 0,
+        description: "Lawn service",
+        quantity: 1,
+        unitPrice: parsedAmount,
+      });
+    }
+
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-end justify-center">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="relative bg-background w-full max-w-[428px] rounded-t-2xl animate-in slide-in-from-bottom duration-200">
+        <div className="flex items-center justify-between p-4 pb-2 border-b border-border">
+          <h2 className="text-lg font-bold">Log Past Job</h2>
+          <button onClick={onClose} className="text-muted-foreground">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <div className="p-4 space-y-4">
+          <div>
+            <label className="text-xs font-medium text-muted-foreground mb-1.5 block">
+              Date *
+            </label>
+            <input
+              type="date"
+              value={date}
+              max={new Date().toISOString().split("T")[0]}
+              onChange={(e) => setDate(e.target.value)}
+              className="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+
+          {properties.length > 1 && (
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1.5 block">
+                Property
+              </label>
+              <select
+                value={propertyId}
+                onChange={(e) => setPropertyId(Number(e.target.value))}
+                className="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                {properties.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}{p.address ? ` — ${p.address}` : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <div>
+            <label className="text-xs font-medium text-muted-foreground mb-1.5 block">
+              Amount (optional)
+            </label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
+              <input
+                type="number"
+                inputMode="decimal"
+                min="0"
+                step="0.01"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                placeholder="0.00"
+                className="w-full pl-6 pr-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="text-xs font-medium text-muted-foreground mb-1.5 block">
+              Payment Status
+            </label>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setPaymentStatus("paid")}
+                className={cn(
+                  "flex-1 py-2.5 rounded-lg text-sm font-medium border transition-colors",
+                  paymentStatus === "paid"
+                    ? "bg-emerald-600 text-white border-emerald-600"
+                    : "border-border text-foreground"
+                )}
+              >
+                Paid
+              </button>
+              <button
+                onClick={() => setPaymentStatus("unpaid")}
+                className={cn(
+                  "flex-1 py-2.5 rounded-lg text-sm font-medium border transition-colors",
+                  paymentStatus === "unpaid"
+                    ? "bg-amber-500 text-white border-amber-500"
+                    : "border-border text-foreground"
+                )}
+              >
+                Unpaid
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label className="text-xs font-medium text-muted-foreground mb-1.5 block">
+              Notes (optional)
+            </label>
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Any notes about the job..."
+              rows={2}
+              className="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+            />
+          </div>
+
+          <button
+            onClick={handleSave}
+            disabled={!date || saving}
+            className="w-full bg-primary text-primary-foreground py-3 rounded-xl font-medium text-sm disabled:opacity-50"
+          >
+            Save Job
+          </button>
         </div>
       </div>
     </div>
