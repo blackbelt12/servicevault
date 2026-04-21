@@ -275,9 +275,10 @@ export default function RoutePage() {
             </div>
             <button
               onClick={() => setShowAddStop(true)}
-              className="flex items-center gap-1 border border-primary text-primary px-2.5 py-2 rounded-lg text-sm font-medium"
+              className="flex items-center gap-1.5 border border-primary text-primary px-3 py-2 rounded-lg text-sm font-medium"
             >
               <Plus className="h-4 w-4" />
+              Add Stop
             </button>
             {pending.length > 0 && (
               <button

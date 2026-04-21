@@ -24,11 +24,12 @@ export default function ClientsPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("All");
   const [activeListId, setActiveListId] = useState<number | null>(null);
+  const [selectionMode, setSelectionMode] = useState(false);
   const [selectedClientIds, setSelectedClientIds] = useState<number[]>([]);
   const [showPicker, setShowPicker] = useState(false);
   const navigate = useNavigate();
 
-  const selecting = selectedClientIds.length > 0;
+  const selecting = selectionMode || selectedClientIds.length > 0;
 
   const lists = useLiveQuery(() => db.clientLists.orderBy("name").toArray(), []);
 
@@ -44,11 +45,13 @@ export default function ClientsPage() {
         .equals(activeListId)
         .toArray();
       const propertyIds = members.map((m) => m.propertyId);
+      if (propertyIds.length === 0) return [];
       const properties = await db.properties
         .where("id")
         .anyOf(propertyIds)
         .toArray();
       const clientIds = [...new Set(properties.map((p) => p.clientId))];
+      if (clientIds.length === 0) return [];
       const all = await db.clients.where("id").anyOf(clientIds).toArray();
       return all.filter(matchesSearch).sort((a, b) => a.name.localeCompare(b.name));
     }
@@ -119,7 +122,7 @@ export default function ClientsPage() {
                   Add to...
                 </button>
                 <button
-                  onClick={() => setSelectedClientIds([])}
+                  onClick={() => { setSelectionMode(false); setSelectedClientIds([]); }}
                   className="flex items-center text-muted-foreground p-2"
                 >
                   <X className="h-5 w-5" />
@@ -129,9 +132,7 @@ export default function ClientsPage() {
               <>
                 {clients && clients.length > 0 && (
                   <button
-                    onClick={() => {
-                      if (clients.length > 0) toggleSelect(clients[0].id!);
-                    }}
+                    onClick={() => setSelectionMode(true)}
                     className="text-sm text-primary font-medium px-2 py-2"
                   >
                     Select
