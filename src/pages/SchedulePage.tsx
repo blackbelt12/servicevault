@@ -12,6 +12,7 @@ import {
   Repeat,
   MapPin,
   GripVertical,
+  CheckCircle2,
 } from "lucide-react";
 import { db, todayStr } from "@/db";
 import type { Client, Job, Property, ServiceItem } from "@/db";
@@ -443,6 +444,18 @@ function JobCard({
 }) {
   const navigate = useNavigate();
 
+  const handleComplete = async (paymentStatus: "paid" | "unpaid") => {
+    const now = new Date();
+    await db.jobs.update(job.id!, {
+      status: "completed",
+      paymentStatus,
+      completedAt: now,
+      updatedAt: now,
+    });
+    const stop = await db.routeStops.where("jobId").equals(job.id!).first();
+    if (stop) await db.routeStops.update(stop.id!, { status: "completed" });
+  };
+
   const statusStyle = cn(
     "text-[10px] px-2 py-0.5 rounded-full font-medium",
     job.status === "completed" && "bg-green-100 text-green-700",
@@ -500,6 +513,23 @@ function JobCard({
           )}
         </div>
       </button>
+      {(job.status === "scheduled" || job.status === "in_progress") && (
+        <div className="flex flex-col gap-1 shrink-0">
+          <button
+            onClick={() => handleComplete("paid")}
+            className="flex items-center justify-center gap-1 bg-emerald-600 text-white px-3 py-1.5 rounded-md text-xs font-semibold"
+          >
+            <CheckCircle2 className="h-3 w-3" />
+            Paid
+          </button>
+          <button
+            onClick={() => handleComplete("unpaid")}
+            className="flex items-center justify-center gap-1 bg-amber-500 text-white px-3 py-1.5 rounded-md text-xs font-semibold"
+          >
+            Unpaid
+          </button>
+        </div>
+      )}
     </div>
   );
 }

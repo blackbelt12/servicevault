@@ -57,7 +57,6 @@ export default function RoutePage() {
   );
 
   const [enriched, setEnriched] = useState<EnrichedStop[]>([]);
-  const [completing, setCompleting] = useState<EnrichedStop | null>(null);
   const [showAddStop, setShowAddStop] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
@@ -160,6 +159,17 @@ export default function RoutePage() {
     }
     setLoadingRouteId(null);
   };
+
+  const handleQuickComplete = useCallback(async (item: EnrichedStop, paymentStatus: "paid" | "unpaid") => {
+    const now = new Date();
+    await db.jobs.update(item.job.id!, {
+      status: "completed",
+      paymentStatus,
+      completedAt: now,
+      updatedAt: now,
+    });
+    await db.routeStops.update(item.stop.id!, { status: "completed" });
+  }, []);
 
   const startRoute = () => {
     const first = pending[0];
@@ -422,20 +432,13 @@ export default function RoutePage() {
                 key={item.stop.id}
                 item={item}
                 index={idx}
-                onComplete={() => setCompleting(item)}
+                onComplete={(status) => handleQuickComplete(item, status)}
               />
             ))}
           </SortableContext>
         </DndContext>
 
       </div>
-
-      {completing && (
-        <CompleteModal
-          item={completing}
-          onClose={() => setCompleting(null)}
-        />
-      )}
 
       {showAddStop && (
         <AddStopModal
@@ -471,7 +474,7 @@ function SortableJobCard({
 }: {
   item: EnrichedStop;
   index: number;
-  onComplete: () => void;
+  onComplete: (status: "paid" | "unpaid") => void;
 }) {
   const {
     attributes,
@@ -538,13 +541,21 @@ function SortableJobCard({
         )}
       </div>
 
-      <button
-        onClick={onComplete}
-        className="shrink-0 self-center flex items-center gap-1 bg-primary text-primary-foreground px-3 py-2 rounded-md text-xs font-semibold"
-      >
-        <CheckCircle2 className="h-3.5 w-3.5" />
-        Done
-      </button>
+      <div className="shrink-0 self-center flex flex-col gap-1">
+        <button
+          onClick={() => onComplete("paid")}
+          className="flex items-center justify-center gap-1 bg-emerald-600 text-white px-3 py-1.5 rounded-md text-xs font-semibold"
+        >
+          <CheckCircle2 className="h-3 w-3" />
+          Paid
+        </button>
+        <button
+          onClick={() => onComplete("unpaid")}
+          className="flex items-center justify-center gap-1 bg-amber-500 text-white px-3 py-1.5 rounded-md text-xs font-semibold"
+        >
+          Unpaid
+        </button>
+      </div>
     </div>
   );
 }
