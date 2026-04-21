@@ -22,6 +22,7 @@ export interface Client {
   id?: number;
   status: "active" | "quote" | "inactive";
   name: string;
+  nickname?: string;
   phone?: string;
   email?: string;
   notes?: string;

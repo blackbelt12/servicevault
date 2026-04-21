@@ -20,6 +20,7 @@ import type { Client } from "@/db";
 interface EnrichedClient extends Client {
   primaryAddress?: string;
   listNames: string[];
+  // nickname is already on Client, just ensuring it's carried through enrich()
 }
 import { cn } from "@/lib/utils";
 import AddToTargetPicker from "@/components/AddToTargetPicker";
@@ -353,6 +354,11 @@ export default function ClientsPage() {
                         {client.status}
                       </span>
                     </div>
+                    {client.nickname && (
+                      <span className="text-xs text-muted-foreground mt-0.5 truncate block">
+                        {client.nickname}
+                      </span>
+                    )}
                     {(client as EnrichedClient).primaryAddress && (
                       <span className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
                         <MapPin className="h-3 w-3 shrink-0" />
@@ -563,6 +569,11 @@ function SwipeableClientCard({
               {client.status}
             </span>
           </div>
+          {client.nickname && (
+            <span className="text-xs text-muted-foreground mt-0.5 truncate block">
+              {client.nickname}
+            </span>
+          )}
           {client.primaryAddress && (
             <span className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
               <MapPin className="h-3 w-3 shrink-0" />

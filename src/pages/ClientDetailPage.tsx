@@ -155,6 +155,9 @@ export default function ClientDetailPage() {
           </div>
           <div>
             <h1 className="text-xl font-bold">{client.name}</h1>
+            {client.nickname && (
+              <p className="text-sm text-muted-foreground">{client.nickname}</p>
+            )}
             <span className={cn("text-xs px-2 py-0.5 rounded-full font-medium", statusColor)}>
               {client.status}
             </span>

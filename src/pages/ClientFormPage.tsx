@@ -18,6 +18,7 @@ interface PropertyForm {
 interface FormData {
   status: Client["status"];
   name: string;
+  nickname: string;
   phone: string;
   email: string;
   notes: string;
@@ -49,6 +50,7 @@ export default function ClientFormPage() {
   const [form, setForm] = useState<FormData>({
     status: "active",
     name: "",
+    nickname: "",
     phone: "",
     email: "",
     notes: "",
@@ -71,6 +73,7 @@ export default function ClientFormPage() {
         setForm({
           status: client.status,
           name: client.name,
+          nickname: client.nickname ?? "",
           phone: client.phone ?? "",
           email: client.email ?? "",
           notes: client.notes ?? "",
@@ -133,6 +136,7 @@ export default function ClientFormPage() {
     const data: Omit<Client, "id"> = {
       status: form.status,
       name: form.name.trim(),
+      nickname: form.nickname.trim() || undefined,
       phone: form.phone || undefined,
       email: form.email || undefined,
       notes: form.notes || undefined,
@@ -254,6 +258,12 @@ export default function ClientFormPage() {
             value={form.name}
             onChange={(v) => set("name", v)}
             placeholder="Full name or business name"
+          />
+          <Field
+            label="Nickname"
+            value={form.nickname}
+            onChange={(v) => set("nickname", v)}
+            placeholder="e.g. Joe, The Smiths"
           />
           <Field
             label="Phone"
