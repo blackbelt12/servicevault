@@ -19,6 +19,7 @@ import type { Client } from "@/db";
 
 interface EnrichedClient extends Client {
   primaryAddress?: string;
+  listNames: string[];
 }
 import { cn } from "@/lib/utils";
 import AddToTargetPicker from "@/components/AddToTargetPicker";
@@ -47,16 +48,35 @@ export default function ClientsPage() {
       c.name.toLowerCase().includes(search.toLowerCase()) ||
       c.phone?.includes(search);
 
-    // Build a clientId → primary address map from all properties
+    // Build maps from all properties, list members, and lists in one pass
     const allProps = await db.properties.toArray();
+    const allMembers = await db.clientListMembers.toArray();
+    const allLists = await db.clientLists.toArray();
+
+    const listNameById = new Map(allLists.map((l) => [l.id!, l.name]));
+
     const firstPropByClient = new Map<number, string>();
+    const clientListNames = new Map<number, Set<string>>();
+
     for (const p of allProps) {
       if (!firstPropByClient.has(p.clientId) && p.address)
         firstPropByClient.set(p.clientId, p.address);
     }
+    for (const m of allMembers) {
+      const name = listNameById.get(m.listId);
+      if (!name) continue;
+      // find which client owns this property
+      const prop = allProps.find((p) => p.id === m.propertyId);
+      if (!prop) continue;
+      if (!clientListNames.has(prop.clientId))
+        clientListNames.set(prop.clientId, new Set());
+      clientListNames.get(prop.clientId)!.add(name);
+    }
+
     const enrich = (c: Client): EnrichedClient => ({
       ...c,
       primaryAddress: firstPropByClient.get(c.id!) ?? undefined,
+      listNames: [...(clientListNames.get(c.id!) ?? [])].sort(),
     });
 
     // Filter by saved route
@@ -198,20 +218,31 @@ export default function ClientsPage() {
         </div>
 
         <div className="flex gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none] [-webkit-overflow-scrolling:touch]">
-          {(["All", "Active"] as StatusFilter[]).map((f) => (
-            <button
-              key={f}
-              onClick={() => { setStatusFilter(f); setActiveListId(null); setActiveRouteId(null); }}
-              className={cn(
-                "px-3 py-1.5 rounded-md border text-xs font-semibold whitespace-nowrap transition-colors shrink-0",
-                activeListId === null && activeRouteId === null && statusFilter === f
-                  ? "bg-foreground text-background border-foreground"
-                  : "bg-background text-foreground/85 border-border"
-              )}
-            >
-              {f}
-            </button>
-          ))}
+          {/* All pill */}
+          <button
+            onClick={() => { setStatusFilter("All"); setActiveListId(null); setActiveRouteId(null); }}
+            className={cn(
+              "px-3 py-1.5 rounded-md border text-xs font-semibold whitespace-nowrap transition-colors shrink-0",
+              activeListId === null && activeRouteId === null && statusFilter === "All"
+                ? "bg-foreground text-background border-foreground"
+                : "bg-background text-foreground/85 border-border"
+            )}
+          >
+            All
+          </button>
+          {/* Active — prebuilt list pill */}
+          <button
+            onClick={() => { setStatusFilter("Active"); setActiveListId(null); setActiveRouteId(null); }}
+            className={cn(
+              "flex items-center gap-1 px-3 py-1.5 rounded-md border text-xs font-semibold whitespace-nowrap transition-colors shrink-0",
+              activeListId === null && activeRouteId === null && statusFilter === "Active"
+                ? "bg-foreground text-background border-foreground"
+                : "bg-background text-foreground/85 border-border"
+            )}
+          >
+            <span className="h-1.5 w-1.5 rounded-full bg-green-500 shrink-0" />
+            Active
+          </button>
           {lists && lists.length > 0 && (
             <span className="self-center text-[10px] text-muted-foreground font-medium px-1 shrink-0">Lists</span>
           )}
@@ -327,6 +358,15 @@ export default function ClientsPage() {
                         <MapPin className="h-3 w-3 shrink-0" />
                         <span className="truncate">{(client as EnrichedClient).primaryAddress}</span>
                       </span>
+                    )}
+                    {(client as EnrichedClient).listNames.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {(client as EnrichedClient).listNames.map((name) => (
+                          <span key={name} className="text-[10px] px-1.5 py-0.5 bg-primary/10 text-primary rounded-full font-medium">
+                            {name}
+                          </span>
+                        ))}
+                      </div>
                     )}
                   </div>
                 </button>
@@ -528,6 +568,15 @@ function SwipeableClientCard({
               <MapPin className="h-3 w-3 shrink-0" />
               <span className="truncate">{client.primaryAddress}</span>
             </span>
+          )}
+          {client.listNames.length > 0 && (
+            <div className="flex flex-wrap gap-1 mt-1">
+              {client.listNames.map((name) => (
+                <span key={name} className="text-[10px] px-1.5 py-0.5 bg-primary/10 text-primary rounded-full font-medium">
+                  {name}
+                </span>
+              ))}
+            </div>
           )}
         </div>
       </button>
