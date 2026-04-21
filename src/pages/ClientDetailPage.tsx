@@ -38,6 +38,7 @@ export default function ClientDetailPage() {
   const [showListPicker, setShowListPicker] = useState(false);
   const [jobTab, setJobTab] = useState<JobTab>("all");
   const [showLogJob, setShowLogJob] = useState(false);
+  const [showAddProperty, setShowAddProperty] = useState(false);
 
   const selecting = selectedProps.length > 0;
 
@@ -163,39 +164,47 @@ export default function ClientDetailPage() {
 
       <div className="px-4 space-y-3 pb-4">
         {/* Properties */}
-        {properties && properties.length > 0 && (
-          <div className="bg-card border border-border rounded-xl p-4">
-            <div className="flex items-center justify-between mb-2">
-              <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
-                <Home className="h-4 w-4 text-muted-foreground" />
-                Properties
-              </h2>
-              {selecting ? (
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setShowListPicker(true)}
-                    className="text-xs font-medium text-primary-foreground bg-primary px-2.5 py-1 rounded-lg flex items-center gap-1"
-                  >
-                    <FolderOpen className="h-3 w-3" />
-                    Add to List
-                  </button>
-                  <button onClick={() => setSelectedProps([])} className="text-muted-foreground">
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-              ) : (
+        <div className="bg-card border border-border rounded-xl p-4">
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
+              <Home className="h-4 w-4 text-muted-foreground" />
+              Properties
+            </h2>
+            {selecting ? (
+              <div className="flex items-center gap-2">
                 <button
-                  onClick={() => {
-                    if (properties.length > 0) toggleProp(properties[0].id!);
-                  }}
-                  className="text-xs font-medium text-primary"
+                  onClick={() => setShowListPicker(true)}
+                  className="text-xs font-medium text-primary-foreground bg-primary px-2.5 py-1 rounded-lg flex items-center gap-1"
                 >
-                  Select
+                  <FolderOpen className="h-3 w-3" />
+                  Add to List
                 </button>
-              )}
-            </div>
+                <button onClick={() => setSelectedProps([])} className="text-muted-foreground">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-3">
+                {properties && properties.length > 0 && (
+                  <button
+                    onClick={() => toggleProp(properties[0].id!)}
+                    className="text-xs font-medium text-muted-foreground"
+                  >
+                    Select
+                  </button>
+                )}
+                <button
+                  onClick={() => setShowAddProperty(true)}
+                  className="flex items-center gap-1 text-xs font-medium text-primary"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Property
+                </button>
+              </div>
+            )}
+          </div>
             <div className="space-y-2">
-              {properties.map((prop) => (
+              {(properties ?? []).map((prop) => (
                 <button
                   key={prop.id}
                   onClick={() => selecting && toggleProp(prop.id!)}
@@ -222,8 +231,10 @@ export default function ClientDetailPage() {
                 </button>
               ))}
             </div>
+            {!selecting && properties && properties.length === 0 && (
+              <p className="text-sm text-muted-foreground text-center py-2">No properties yet.</p>
+            )}
           </div>
-        )}
 
         {showListPicker && (
           <AddToTargetPicker
@@ -294,7 +305,7 @@ export default function ClientDetailPage() {
               className="flex items-center gap-1 text-xs font-medium text-primary"
             >
               <Plus className="h-3.5 w-3.5" />
-              Log Past Job
+              Log Job
             </button>
           </div>
 
@@ -394,19 +405,128 @@ export default function ClientDetailPage() {
       </div>
 
       {showLogJob && properties && (
-        <LogPastJobModal
+        <LogJobModal
           clientId={clientId}
           properties={properties}
           onClose={() => setShowLogJob(false)}
+        />
+      )}
+
+      {showAddProperty && client && (
+        <AddPropertyModal
+          clientId={clientId}
+          clientName={client.name}
+          existingCount={properties?.length ?? 0}
+          onClose={() => setShowAddProperty(false)}
         />
       )}
     </div>
   );
 }
 
-/* ─── Log Past Job Modal ─── */
+/* ─── Add Property Modal ─── */
 
-function LogPastJobModal({
+function AddPropertyModal({
+  clientId,
+  clientName,
+  existingCount,
+  onClose,
+}: {
+  clientId: number;
+  clientName: string;
+  existingCount: number;
+  onClose: () => void;
+}) {
+  const defaultName = existingCount === 0
+    ? `${clientName}'s Property`
+    : `${clientName}'s Property ${existingCount + 1}`;
+  const [name, setName] = useState(defaultName);
+  const [nameTouched, setNameTouched] = useState(false);
+  const [address, setAddress] = useState("");
+  const [price, setPrice] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    if (!name.trim() || saving) return;
+    setSaving(true);
+    await db.properties.add({
+      clientId,
+      name: name.trim(),
+      address: address.trim(),
+      defaultPrice: parseFloat(price) > 0 ? parseFloat(price) : undefined,
+    });
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-end justify-center">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="relative bg-background w-full max-w-[428px] rounded-t-2xl animate-in slide-in-from-bottom duration-200">
+        <div className="flex items-center justify-between p-4 pb-2 border-b border-border">
+          <h2 className="text-lg font-bold">Add Property</h2>
+          <button onClick={onClose} className="text-muted-foreground">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <div className="p-4 space-y-4">
+          <div>
+            <label className="text-xs font-medium text-muted-foreground mb-1.5 block">
+              Property Name *
+            </label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => { setName(e.target.value); setNameTouched(true); }}
+              className="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              autoFocus
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground mb-1.5 block">
+              Address
+            </label>
+            <input
+              type="text"
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              placeholder="123 Main St"
+              className="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground mb-1.5 block">
+              Price per Visit (optional)
+            </label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
+              <input
+                type="number"
+                inputMode="decimal"
+                min="0"
+                step="0.01"
+                value={price}
+                onChange={(e) => setPrice(e.target.value)}
+                placeholder="0.00"
+                className="w-full pl-6 pr-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+            </div>
+          </div>
+          <button
+            onClick={handleSave}
+            disabled={!name.trim() || saving}
+            className="w-full bg-primary text-primary-foreground py-3 rounded-xl font-medium text-sm disabled:opacity-50"
+          >
+            Add Property
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Log Job Modal ─── */
+
+function LogJobModal({
   clientId,
   properties,
   onClose,
@@ -463,7 +583,7 @@ function LogPastJobModal({
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
       <div className="relative bg-background w-full max-w-[428px] rounded-t-2xl animate-in slide-in-from-bottom duration-200">
         <div className="flex items-center justify-between p-4 pb-2 border-b border-border">
-          <h2 className="text-lg font-bold">Log Past Job</h2>
+          <h2 className="text-lg font-bold">Log Job</h2>
           <button onClick={onClose} className="text-muted-foreground">
             <X className="h-5 w-5" />
           </button>
