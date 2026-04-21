@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 interface PropertyForm {
   id?: number;
   name: string;
+  nameTouched: boolean;
   address: string;
   // Stored as a string so the input can be empty mid-edit. Parsed to a
   // number at save time; blank / non-numeric leaves defaultPrice unset.
@@ -23,8 +24,9 @@ interface FormData {
   properties: PropertyForm[];
 }
 
-const newProperty = (index: number): PropertyForm => ({
-  name: `Property ${index}`,
+const newProperty = (index: number, clientName = ""): PropertyForm => ({
+  name: clientName ? `${clientName}'s Property` : `Property ${index}`,
+  nameTouched: false,
   address: "",
   price: "",
 });
@@ -77,6 +79,7 @@ export default function ClientFormPage() {
               ? props.map((p) => ({
                   id: p.id,
                   name: p.name,
+                  nameTouched: true,
                   address: p.address,
                   price:
                     p.defaultPrice !== undefined ? String(p.defaultPrice) : "",
@@ -89,13 +92,25 @@ export default function ClientFormPage() {
   }, [clientId]);
 
   const set = (field: keyof Omit<FormData, "properties">, value: string) =>
-    setForm((f) => ({ ...f, [field]: value }));
+    setForm((f) => {
+      const next = { ...f, [field]: value };
+      if (field === "name" && !isEdit) {
+        next.properties = f.properties.map((p, i) =>
+          i === 0 && !p.nameTouched
+            ? { ...p, name: value ? `${value}'s Property` : "Property 1" }
+            : p
+        );
+      }
+      return next;
+    });
 
   const setProp = (idx: number, field: keyof PropertyForm, value: string) =>
     setForm((f) => ({
       ...f,
       properties: f.properties.map((p, i) =>
-        i === idx ? { ...p, [field]: value } : p
+        i === idx
+          ? { ...p, [field]: value, ...(field === "name" ? { nameTouched: true } : {}) }
+          : p
       ),
     }));
 
@@ -163,11 +178,11 @@ export default function ClientFormPage() {
       navigate(`/clients/${clientId}`);
     } else {
       const newId = (await db.clients.add(data)) as number;
-      for (const p of form.properties) {
-        if (p.address.trim()) {
+      for (const [i, p] of form.properties.entries()) {
+        if (i === 0 || p.address.trim()) {
           await db.properties.add({
             clientId: newId,
-            name: p.name.trim() || "Property",
+            name: p.name.trim() || `${form.name.trim()}'s Property`,
             address: p.address.trim(),
             defaultPrice: parsePrice(p.price),
           });

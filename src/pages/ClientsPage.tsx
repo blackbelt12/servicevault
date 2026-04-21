@@ -27,6 +27,7 @@ export default function ClientsPage() {
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedClientIds, setSelectedClientIds] = useState<number[]>([]);
   const [showPicker, setShowPicker] = useState(false);
+  const [pickerPropertyIds, setPickerPropertyIds] = useState<number[]>([]);
   const navigate = useNavigate();
 
   const selecting = selectionMode || selectedClientIds.length > 0;
@@ -63,14 +64,14 @@ export default function ClientsPage() {
     });
   }, [search, statusFilter, activeListId]);
 
-  // Get property IDs for selected clients
-  const selectedPropertyIds = useLiveQuery(async () => {
-    if (selectedClientIds.length === 0) return [];
+  const handleAddTo = async () => {
     const props = await db.properties.toArray();
-    return props
+    const ids = props
       .filter((p) => selectedClientIds.includes(p.clientId))
       .map((p) => p.id!);
-  }, [selectedClientIds]) ?? [];
+    setPickerPropertyIds(ids);
+    setShowPicker(true);
+  };
 
   const toggleSelect = (clientId: number) => {
     setSelectedClientIds((prev) =>
@@ -115,8 +116,9 @@ export default function ClientsPage() {
             {selecting ? (
               <>
                 <button
-                  onClick={() => setShowPicker(true)}
-                  className="flex items-center gap-1.5 bg-primary text-primary-foreground px-3 py-2 rounded-lg text-sm font-medium"
+                  onClick={handleAddTo}
+                  disabled={selectedClientIds.length === 0}
+                  className="flex items-center gap-1.5 bg-primary text-primary-foreground px-3 py-2 rounded-lg text-sm font-medium disabled:opacity-40"
                 >
                   <Plus className="h-4 w-4" />
                   Add to...
@@ -307,12 +309,14 @@ export default function ClientsPage() {
         )}
       </div>
 
-      {showPicker && selectedPropertyIds.length > 0 && (
+      {showPicker && (
         <AddToTargetPicker
-          propertyIds={selectedPropertyIds}
+          propertyIds={pickerPropertyIds}
           onClose={() => {
             setShowPicker(false);
+            setPickerPropertyIds([]);
             setSelectedClientIds([]);
+            setSelectionMode(false);
           }}
         />
       )}

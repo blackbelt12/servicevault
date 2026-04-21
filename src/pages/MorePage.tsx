@@ -6,6 +6,7 @@ import {
   Building2,
   Users,
   List,
+  Route,
   FolderOpen,
   CircleHelp,
   Settings,
@@ -53,6 +54,13 @@ const menuItems: {
     label: "Saved Lists",
     path: "/lists",
     description: "Organize route groups",
+    section: "business",
+  },
+  {
+    icon: Route,
+    label: "Saved Routes",
+    path: "/more/saved-routes",
+    description: "Load and manage saved routes",
     section: "business",
   },
   {

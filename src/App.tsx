@@ -17,6 +17,7 @@ const ServiceItemsPage = React.lazy(() => import("@/pages/ServiceItemsPage"));
 const BusinessSettingsPage = React.lazy(() => import("@/pages/BusinessSettingsPage"));
 const ExportDataPage = React.lazy(() => import("@/pages/ExportDataPage"));
 const ImportDataPage = React.lazy(() => import("@/pages/ImportDataPage"));
+const SavedRoutesPage = React.lazy(() => import("@/pages/SavedRoutesPage"));
 const UnpaidPage = React.lazy(() => import("@/pages/UnpaidPage"));
 const CompletedJobsPage = React.lazy(() => import("@/pages/CompletedJobsPage"));
 const ListsPage = React.lazy(() => import("@/pages/ListsPage"));
@@ -45,7 +46,7 @@ export default function App() {
   }, []);
 
   return (
-    <BrowserRouter>
+    <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <Suspense fallback={null}>
         <Routes>
           {/* Onboarding — outside AppLayout (no tab bar) */}
@@ -79,6 +80,7 @@ export default function App() {
             <Route path="more/settings" element={<BusinessSettingsPage />} />
             <Route path="more/export" element={<ExportDataPage />} />
             <Route path="more/import" element={<ImportDataPage />} />
+            <Route path="more/saved-routes" element={<SavedRoutesPage />} />
             <Route path="*" element={<Navigate to="/clients" replace />} />
           </Route>
         </Routes>

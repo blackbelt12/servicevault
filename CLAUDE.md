@@ -164,3 +164,33 @@ npx shadcn@latest add button
 ```
 
 **Export all data:** Use the existing `ExportDataPage` — it serialises all tables to JSON.
+
+---
+
+## Recent Changes (April 2026)
+
+### Client form — name-only creation
+- `ClientFormPage.tsx`: First property name auto-syncs to `{ClientName}'s Property` as the user types the client name
+- Auto-sync stops if the user manually edits the property name (`nameTouched` flag on `PropertyForm`)
+- On save, the first property is **always** created even if address is blank — no longer required
+- Edit mode: existing property names are loaded with `nameTouched: true` so they never get overwritten
+
+### Saved Routes page (`/more/saved-routes`)
+- New page: `src/pages/SavedRoutesPage.tsx`
+- Listed under More → Saved Routes (between Saved Lists and Service Templates)
+- Shows all saved routes with **Load** (adds to today's route + navigates to Route tab) and **Delete**
+- Save route already existed in `RoutePage.tsx` via the ⋮ menu → "Save Route" (only visible when stops are on the route)
+
+### Fix: "Add to..." button in client selection mode
+- `ClientsPage.tsx`: Button was broken due to a race condition — `selectedPropertyIds` (a `useLiveQuery`) could still be `[]` when the button was clicked
+- Fixed by resolving property IDs **imperatively** (`handleAddTo` async function) instead of relying on a reactive query
+- Button is now **disabled** (greyed out) until at least one client is selected
+- Picker closes and clears selection + selection mode on dismiss
+
+### React Router v6 future flag warnings silenced
+- `App.tsx` `BrowserRouter` now has `future={{ v7_startTransition: true, v7_relativeSplatPath: true }}`
+
+### Known gotchas
+- `useLiveQuery` returns `undefined` on first render — always use `?? []` or `?? defaultValue` fallback
+- Don't gate UI on `useLiveQuery` results for click handlers — fetch imperatively instead to avoid race conditions
+- DB is currently at version **8** — increment before adding any new indexes/tables
