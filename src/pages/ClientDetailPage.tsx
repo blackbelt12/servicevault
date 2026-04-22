@@ -444,7 +444,6 @@ function AddPropertyModal({
     ? `${clientName}'s Property`
     : `${clientName}'s Property ${existingCount + 1}`;
   const [name, setName] = useState(defaultName);
-  const [nameTouched, setNameTouched] = useState(false);
   const [address, setAddress] = useState("");
   const [price, setPrice] = useState("");
   const [saving, setSaving] = useState(false);
@@ -479,7 +478,7 @@ function AddPropertyModal({
             <input
               type="text"
               value={name}
-              onChange={(e) => { setName(e.target.value); setNameTouched(true); }}
+              onChange={(e) => setName(e.target.value)}
               className="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
               autoFocus
             />
